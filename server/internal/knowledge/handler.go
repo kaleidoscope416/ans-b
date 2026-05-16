@@ -1,6 +1,8 @@
 package knowledge
 
 import (
+	"net/http"
+
 	"ans-b/server/internal/httpresponse"
 
 	"github.com/gin-gonic/gin"
@@ -29,8 +31,48 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Create(c *gin.Context) {
-	// TODO: validate and create a knowledge base entry.
-	httpresponse.TODO(c, "knowledge create")
+	var request struct {
+		Question string   `json:"question"`
+		Answer   string   `json:"answer"`
+		Category string   `json:"category"`
+		Tags     []string `json:"tags"`
+		Source   string   `json:"source"`
+		Remark   string   `json:"remark"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    40000,
+			"message": "invalid request body",
+			"data":    nil,
+		})
+		return
+	}
+
+	err := h.service.Create(c.Request.Context(), CreateInput{
+		Question: request.Question,
+		Answer:   request.Answer,
+		Category: request.Category,
+		Tags:     request.Tags,
+		Source:   request.Source,
+		Remark:   request.Remark,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    40000,
+			"message": err.Error(),
+			"data":    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"question": request.Question,
+			"category": request.Category,
+		},
+	})
 }
 
 func (h *Handler) Get(c *gin.Context) {

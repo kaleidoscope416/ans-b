@@ -1,9 +1,23 @@
 package knowledge
 
-type Repository struct{}
+import (
+	"context"
+	"database/sql"
 
-func NewRepository() *Repository {
-	return &Repository{}
+	"ans-b/server/internal/qaimport"
+)
+
+type Repository struct {
+	inner *qaimport.PostgresRepository
 }
 
-// TODO: add database access for knowledge entries and import records.
+func NewRepository(db *sql.DB) *Repository {
+	return &Repository{inner: qaimport.NewPostgresRepository(db)}
+}
+
+func (r *Repository) InsertKnowledge(ctx context.Context, item qaimport.Item, chunkText string, embedding string) error {
+	if r == nil || r.inner == nil {
+		return sql.ErrConnDone
+	}
+	return r.inner.InsertKnowledge(ctx, item, chunkText, embedding)
+}

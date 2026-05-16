@@ -23,6 +23,27 @@ func TestRegisterRoutesAddsHealthEndpoint(t *testing.T) {
 	}
 }
 
+func TestRegisterRoutesHandlesCORSPreflight(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+
+	RegisterRoutes(engine)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodOptions, "/api/v1/qa/ask", nil)
+	request.Header.Set("Origin", "http://127.0.0.1:5173")
+	request.Header.Set("Access-Control-Request-Method", "POST")
+	request.Header.Set("Access-Control-Request-Headers", "content-type")
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected CORS preflight to return 204, got %d", recorder.Code)
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "http://127.0.0.1:5173" {
+		t.Fatalf("expected CORS origin header, got %q", got)
+	}
+}
+
 func TestRegisterRoutesAddsTodoEndpoints(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -39,7 +60,7 @@ func TestRegisterRoutesAddsTodoEndpoints(t *testing.T) {
 		{http.MethodPost, "/api/v1/users/register", http.StatusNotImplemented},
 		{http.MethodGet, "/api/v1/users/me", http.StatusNotImplemented},
 		{http.MethodGet, "/api/v1/knowledge", http.StatusNotImplemented},
-		{http.MethodPost, "/api/v1/knowledge", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/knowledge", http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/qa/ask", http.StatusBadRequest},
 		{http.MethodGet, "/api/v1/search/candidates", http.StatusNotImplemented},
 		{http.MethodPost, "/api/v1/submissions", http.StatusNotImplemented},
