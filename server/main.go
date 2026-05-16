@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"ans-b/server/internal/embedding"
 	"ans-b/server/internal/router"
 
 	"github.com/gin-gonic/gin"
@@ -26,8 +27,14 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
+	embedBaseURL := os.Getenv("EMBED_BASE_URL")
+	if embedBaseURL == "" {
+		embedBaseURL = "http://127.0.0.1:18080"
+	}
+	embedder := embedding.NewHTTPClient(embedBaseURL)
+
 	engine := gin.Default()
-	router.RegisterRoutesWithDB(engine, db)
+	router.RegisterRoutesWithDBAndEmbedder(engine, db, embedder)
 
 	if err := engine.Run(); err != nil {
 		log.Fatalf("failed to start server: %v", err)

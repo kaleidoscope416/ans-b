@@ -15,7 +15,8 @@ func TestServiceAskReturnsBestVectorAnswer(t *testing.T) {
 			Score:    0.72,
 		},
 	}
-	service := NewService(repo)
+	embedder := &fakeEmbedder{embedding: []float64{0.1, 0.2, 0.3}}
+	service := NewService(repo, embedder)
 
 	answer, err := service.Ask(context.Background(), "食堂几点关门？")
 	if err != nil {
@@ -24,17 +25,30 @@ func TestServiceAskReturnsBestVectorAnswer(t *testing.T) {
 	if answer.Answer != "一食堂晚餐营业至 20:00。" {
 		t.Fatalf("unexpected answer: %#v", answer)
 	}
-	if repo.queryEmbedding == "" {
-		t.Fatal("expected query embedding to be generated")
+	if len(embedder.texts) != 1 || embedder.texts[0] != "食堂几点关门？" {
+		t.Fatalf("expected question to be embedded, got %#v", embedder.texts)
+	}
+	if repo.queryEmbedding != "[0.10000000,0.20000000,0.30000000]" {
+		t.Fatalf("unexpected query embedding: %s", repo.queryEmbedding)
 	}
 }
 
 func TestServiceAskRejectsEmptyQuestion(t *testing.T) {
-	service := NewService(&fakeRepository{})
+	service := NewService(&fakeRepository{}, &fakeEmbedder{})
 
 	if _, err := service.Ask(context.Background(), "   "); err == nil {
 		t.Fatal("expected empty question to fail")
 	}
+}
+
+type fakeEmbedder struct {
+	texts     []string
+	embedding []float64
+}
+
+func (e *fakeEmbedder) Embed(ctx context.Context, texts []string) ([][]float64, error) {
+	e.texts = texts
+	return [][]float64{e.embedding}, nil
 }
 
 type fakeRepository struct {

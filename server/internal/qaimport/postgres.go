@@ -1,4 +1,4 @@
-package mockqa
+package qaimport
 
 import (
 	"context"
