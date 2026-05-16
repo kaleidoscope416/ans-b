@@ -18,5 +18,27 @@ services:
       timeout: 3s
       retries: 10
 
+  embed-server:
+    build:
+      context: ./embed-server
+    container_name: campus-embed-server
+    restart: unless-stopped
+    environment:
+      EMBED_MODEL: BAAI/bge-large-zh-v1.5
+      EMBED_DEVICE: cpu
+      EMBED_BATCH_SIZE: "32"
+      HF_HOME: /models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /models/sentence-transformers
+    ports:
+      - "18080:8000"
+    volumes:
+      - campus_embed_models:/models
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/healthz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
 volumes:
   campus_postgres_data:
+  campus_embed_models:
