@@ -9,3 +9,12 @@
 友好的回答。
 3） 用户贡献机制：允许用户补充新问答，经审核后入库，实现众包更新。
 4） 热点问题推荐：基于高频查询词展示“常见问题排行榜”。
+curl -sS -X POST http://127.0.0.1:18080/embed \
+-H "Content-Type: application/json" \
+-d '{"texts":["食堂几点关门？","学校哪里可以打印？"]}'
+
+curl -sS -X POST http://127.0.0.1:8080/api/v1/qa/ask \
+-H "Content-Type: application/json" \
+-d '{"question":"食堂几点关门？"}'
+
+base url用这个 https://api.kimi.com/coding/v1	 model用这个 kimi-for-coding
