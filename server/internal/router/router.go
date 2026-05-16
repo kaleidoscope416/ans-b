@@ -29,7 +29,10 @@ func RegisterRoutesWithDB(engine *gin.Engine, db *sql.DB) {
 func RegisterRoutesWithDBAndEmbedder(engine *gin.Engine, db *sql.DB, embedder qa.Embedder) {
 	engine.Use(func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if origin == "null" || strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://127.0.0.1:") {
+		if origin == "null" ||
+			strings.HasPrefix(origin, "http://localhost:") ||
+			strings.HasPrefix(origin, "http://127.0.0.1:") ||
+			strings.HasPrefix(origin, "http://100.") {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Vary", "Origin")
 		}

@@ -6,6 +6,8 @@ dist/
 
 # Go build output
 server/server
+server/bin/
+.cache/
 
 # Vite / local env
 .env
