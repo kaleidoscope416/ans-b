@@ -19,9 +19,14 @@ type Embedder interface {
 	Embed(ctx context.Context, texts []string) ([][]float64, error)
 }
 
+type AnswerGenerator interface {
+	GenerateAnswer(ctx context.Context, question string, candidates []Answer, minScore float64) (string, error)
+}
+
 type Service struct {
 	repository SearchRepository
 	embedder   Embedder
+	generator  AnswerGenerator
 	minScore   float64
 }
 
@@ -39,14 +44,21 @@ type AskResult struct {
 	Answer     *Answer  `json:"answer"`
 	Candidates []Answer `json:"candidates"`
 	MinScore   float64  `json:"min_score"`
+	AIAnswer   string   `json:"ai_answer"`
+	AIEnabled  bool     `json:"ai_enabled"`
+	AIError    string   `json:"ai_error"`
 }
 
-func NewService(repository SearchRepository, embedder Embedder) *Service {
-	return &Service{
+func NewService(repository SearchRepository, embedder Embedder, generators ...AnswerGenerator) *Service {
+	service := &Service{
 		repository: repository,
 		embedder:   embedder,
 		minScore:   defaultMinScore(),
 	}
+	if len(generators) > 0 {
+		service.generator = generators[0]
+	}
+	return service
 }
 
 func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResult, error) {
@@ -87,6 +99,15 @@ func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResu
 	}
 	if result.Answered {
 		result.Answer = &candidates[0]
+	}
+	if result.Answered && s.generator != nil {
+		result.AIEnabled = true
+		aiAnswer, err := s.generator.GenerateAnswer(ctx, question, candidates, s.minScore)
+		if err != nil {
+			result.AIError = err.Error()
+			return result, nil
+		}
+		result.AIAnswer = strings.TrimSpace(aiAnswer)
 	}
 	return result, nil
 }

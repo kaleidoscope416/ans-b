@@ -26,7 +26,12 @@ func RegisterRoutesWithDB(engine *gin.Engine, db *sql.DB) {
 	RegisterRoutesWithDBAndEmbedder(engine, db, nil)
 }
 
-func RegisterRoutesWithDBAndEmbedder(engine *gin.Engine, db *sql.DB, embedder qa.Embedder) {
+func RegisterRoutesWithDBAndEmbedder(engine *gin.Engine, db *sql.DB, embedder qa.Embedder, generators ...qa.AnswerGenerator) {
+	var generator qa.AnswerGenerator
+	if len(generators) > 0 {
+		generator = generators[0]
+	}
+
 	engine.Use(func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
 		if origin == "null" ||
@@ -56,7 +61,7 @@ func RegisterRoutesWithDBAndEmbedder(engine *gin.Engine, db *sql.DB, embedder qa
 	auth.NewHandler(auth.NewService(auth.NewRepository())).RegisterRoutes(api.Group("/auth"))
 	user.NewHandler(user.NewService(user.NewRepository())).RegisterRoutes(api.Group("/users"))
 	knowledge.NewHandler(knowledge.NewService(knowledge.NewRepository(db), embedder)).RegisterRoutes(api.Group("/knowledge"))
-	qa.NewHandler(qa.NewService(qa.NewRepository(db), embedder)).RegisterRoutes(api.Group("/qa"))
+	qa.NewHandler(qa.NewService(qa.NewRepository(db), embedder, generator)).RegisterRoutes(api.Group("/qa"))
 	search.NewHandler(search.NewService(search.NewRepository())).RegisterRoutes(api.Group("/search"))
 	submission.NewHandler(submission.NewService(submission.NewRepository())).RegisterRoutes(api.Group("/submissions"))
 	analytics.NewHandler(analytics.NewService(analytics.NewRepository())).RegisterRoutes(api.Group("/analytics"))

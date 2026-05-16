@@ -4,6 +4,11 @@ LAN_API_BASE_URL ?= http://100.115.97.57:8080
 SERVER_BIN ?= server/bin/campus-server
 GO_CACHE ?= $(CURDIR)/.cache/go-build
 
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
 .PHONY: console console1 server server-build test
 
 console:

@@ -115,6 +115,14 @@ body {
   background: #f8fbff;
 }
 
+.ai-answer-box {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #f8faff;
+}
+
 .answer-meta {
   display: flex;
   align-items: center;
@@ -136,6 +144,13 @@ body {
   margin: 0;
   color: #344054;
   line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.ai-answer-box p {
+  margin: 0;
+  color: #26324d;
+  line-height: 1.8;
   white-space: pre-wrap;
 }
 

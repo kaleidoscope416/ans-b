@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"ans-b/server/internal/embedding"
+	"ans-b/server/internal/llm"
 	"ans-b/server/internal/router"
 
 	"github.com/gin-gonic/gin"
@@ -32,9 +33,10 @@ func main() {
 		embedBaseURL = "http://127.0.0.1:18080"
 	}
 	embedder := embedding.NewHTTPClient(embedBaseURL)
+	answerGenerator := llm.NewOpenAICompatibleFromEnv()
 
 	engine := gin.Default()
-	router.RegisterRoutesWithDBAndEmbedder(engine, db, embedder)
+	router.RegisterRoutesWithDBAndEmbedder(engine, db, embedder, answerGenerator)
 
 	if err := engine.Run(); err != nil {
 		log.Fatalf("failed to start server: %v", err)

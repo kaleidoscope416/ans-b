@@ -235,6 +235,21 @@ async function askQuestion() {
           :message="`未找到足够相关的答案。最高相似度 ${Number(askResult.candidates?.[0]?.score || 0).toFixed(4)}，命中阈值 ${Number(askResult.min_score || 0).toFixed(2)}。`"
         />
 
+        <t-alert
+          v-if="askResult?.ai_error"
+          class="feedback"
+          theme="warning"
+          :message="`AI 回答生成失败，已返回知识库原始结果：${askResult.ai_error}`"
+        />
+
+        <div v-if="askResult?.ai_answer" class="ai-answer-box">
+          <div class="answer-meta">
+            <t-tag theme="primary" variant="light">AI 回答</t-tag>
+            <span>基于候选知识生成</span>
+          </div>
+          <p>{{ askResult.ai_answer }}</p>
+        </div>
+
         <div v-if="askResult?.answer" class="answer-box">
           <div class="answer-meta">
             <t-tag theme="success" variant="light">

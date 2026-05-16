@@ -2,6 +2,7 @@ package qa
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -83,6 +84,103 @@ func TestServiceAskDoesNotAnswerBelowMinScore(t *testing.T) {
 	}
 }
 
+func TestServiceAskAddsAIAnswerWhenGeneratorSucceeds(t *testing.T) {
+	repo := &fakeRepository{
+		results: []Answer{
+			{
+				ID:       7,
+				Question: "一食堂营业时间是什么？",
+				Answer:   "一食堂晚餐营业至 20:00。",
+				Category: "餐饮服务",
+				Score:    0.72,
+			},
+		},
+	}
+	embedder := &fakeEmbedder{embedding: []float64{0.1, 0.2, 0.3}}
+	generator := &fakeGenerator{answer: "一食堂晚餐到 20:00 结束。"}
+	service := NewService(repo, embedder, generator)
+
+	result, err := service.Ask(context.Background(), "食堂几点关门？", 5)
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if !result.AIEnabled {
+		t.Fatal("expected AI to be enabled")
+	}
+	if result.AIAnswer != "一食堂晚餐到 20:00 结束。" {
+		t.Fatalf("unexpected AI answer: %q", result.AIAnswer)
+	}
+	if generator.question != "食堂几点关门？" {
+		t.Fatalf("expected generator to receive question, got %q", generator.question)
+	}
+	if len(generator.candidates) != 1 || generator.candidates[0].Score != 0.72 {
+		t.Fatalf("expected generator to receive candidates, got %#v", generator.candidates)
+	}
+}
+
+func TestServiceAskKeepsSearchAnswerWhenAIGenerationFails(t *testing.T) {
+	repo := &fakeRepository{
+		results: []Answer{
+			{
+				ID:       7,
+				Question: "一食堂营业时间是什么？",
+				Answer:   "一食堂晚餐营业至 20:00。",
+				Score:    0.72,
+			},
+		},
+	}
+	embedder := &fakeEmbedder{embedding: []float64{0.1, 0.2, 0.3}}
+	generator := &fakeGenerator{err: errors.New("upstream unavailable")}
+	service := NewService(repo, embedder, generator)
+
+	result, err := service.Ask(context.Background(), "食堂几点关门？", 5)
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if !result.AIEnabled {
+		t.Fatal("expected AI to be enabled")
+	}
+	if result.AIAnswer != "" {
+		t.Fatalf("expected empty AI answer, got %q", result.AIAnswer)
+	}
+	if result.AIError == "" {
+		t.Fatal("expected AI error to be recorded")
+	}
+	if result.Answer == nil {
+		t.Fatal("expected search answer to remain available")
+	}
+}
+
+func TestServiceAskDoesNotCallAIWhenBelowMinScore(t *testing.T) {
+	repo := &fakeRepository{
+		results: []Answer{
+			{
+				ID:       9,
+				Question: "校车时刻表在哪里看？",
+				Answer:   "校车时刻表可以在后勤服务栏目查看。",
+				Score:    0.24,
+			},
+		},
+	}
+	embedder := &fakeEmbedder{embedding: []float64{0.1, 0.2, 0.3}}
+	generator := &fakeGenerator{answer: "不应调用"}
+	service := NewService(repo, embedder, generator)
+
+	result, err := service.Ask(context.Background(), "asdkjhasdkjh", 5)
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if result.Answered {
+		t.Fatal("expected low score result to be unanswered")
+	}
+	if generator.called {
+		t.Fatal("expected generator not to be called")
+	}
+	if result.AIEnabled {
+		t.Fatal("expected AI to be disabled for unanswered result")
+	}
+}
+
 func TestServiceAskRejectsEmptyQuestion(t *testing.T) {
 	service := NewService(&fakeRepository{}, &fakeEmbedder{})
 
@@ -111,4 +209,19 @@ func (r *fakeRepository) SearchTop(ctx context.Context, queryEmbedding string, l
 	r.queryEmbedding = queryEmbedding
 	r.limit = limit
 	return r.results, nil
+}
+
+type fakeGenerator struct {
+	called     bool
+	question   string
+	candidates []Answer
+	answer     string
+	err        error
+}
+
+func (g *fakeGenerator) GenerateAnswer(ctx context.Context, question string, candidates []Answer, minScore float64) (string, error) {
+	g.called = true
+	g.question = question
+	g.candidates = candidates
+	return g.answer, g.err
 }
