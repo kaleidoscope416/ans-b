@@ -1,0 +1,22 @@
+services:
+  postgres:
+    build:
+      context: ./postgres
+    container_name: campus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: campus
+      POSTGRES_PASSWORD: campus123
+      POSTGRES_DB: campus_qa
+    ports:
+      - "5432:5432"
+    volumes:
+      - campus_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campus -d campus_qa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  campus_postgres_data:
