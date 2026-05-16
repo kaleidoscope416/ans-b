@@ -228,6 +228,13 @@ async function askQuestion() {
           :message="askError"
         />
 
+        <t-alert
+          v-if="askResult && !askResult.answered"
+          class="feedback"
+          theme="warning"
+          :message="`未找到足够相关的答案。最高相似度 ${Number(askResult.candidates?.[0]?.score || 0).toFixed(4)}，命中阈值 ${Number(askResult.min_score || 0).toFixed(2)}。`"
+        />
+
         <div v-if="askResult?.answer" class="answer-box">
           <div class="answer-meta">
             <t-tag theme="success" variant="light">
@@ -251,7 +258,7 @@ async function askQuestion() {
         <div v-if="askResult?.candidates?.length" class="candidate-section">
           <div class="candidate-title">
             <h3>候选结果</h3>
-            <span>相似度 = 1 - 余弦距离，越接近 1 越相关</span>
+            <span>相似度 = 1 - 余弦距离，低于 {{ Number(askResult.min_score || 0).toFixed(2) }} 不自动回答</span>
           </div>
           <div class="candidate-list">
             <div

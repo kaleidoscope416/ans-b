@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"ans-b/server/internal/embedding"
@@ -20,6 +22,7 @@ type Embedder interface {
 type Service struct {
 	repository SearchRepository
 	embedder   Embedder
+	minScore   float64
 }
 
 type Answer struct {
@@ -32,12 +35,18 @@ type Answer struct {
 }
 
 type AskResult struct {
-	Answer     Answer   `json:"answer"`
+	Answered   bool     `json:"answered"`
+	Answer     *Answer  `json:"answer"`
 	Candidates []Answer `json:"candidates"`
+	MinScore   float64  `json:"min_score"`
 }
 
 func NewService(repository SearchRepository, embedder Embedder) *Service {
-	return &Service{repository: repository, embedder: embedder}
+	return &Service{
+		repository: repository,
+		embedder:   embedder,
+		minScore:   defaultMinScore(),
+	}
 }
 
 func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResult, error) {
@@ -71,8 +80,25 @@ func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResu
 	if len(candidates) == 0 {
 		return nil, errors.New("no relevant answer found")
 	}
-	return &AskResult{
-		Answer:     candidates[0],
+	result := &AskResult{
+		Answered:   candidates[0].Score >= s.minScore,
 		Candidates: candidates,
-	}, nil
+		MinScore:   s.minScore,
+	}
+	if result.Answered {
+		result.Answer = &candidates[0]
+	}
+	return result, nil
+}
+
+func defaultMinScore() float64 {
+	value := strings.TrimSpace(os.Getenv("QA_MIN_SCORE"))
+	if value == "" {
+		return 0.45
+	}
+	score, err := strconv.ParseFloat(value, 64)
+	if err != nil || score < 0 || score > 1 {
+		return 0.45
+	}
+	return score
 }
