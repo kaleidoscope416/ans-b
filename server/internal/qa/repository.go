@@ -14,14 +14,15 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) SearchBest(ctx context.Context, queryEmbedding string) (*Answer, error) {
+func (r *Repository) SearchTop(ctx context.Context, queryEmbedding string, limit int) ([]Answer, error) {
 	if r.db == nil {
 		return nil, errors.New("database is not configured")
 	}
+	if limit <= 0 {
+		limit = 5
+	}
 
-	var answer Answer
-	var tags []string
-	err := r.db.QueryRowContext(ctx, `
+	rows, err := r.db.QueryContext(ctx, `
 		SELECT
 			ki.id,
 			ki.question,
@@ -34,23 +35,37 @@ func (r *Repository) SearchBest(ctx context.Context, queryEmbedding string) (*An
 		WHERE ki.status = 'approved'
 		  AND kc.embedding IS NOT NULL
 		ORDER BY kc.embedding <=> $1::vector
-		LIMIT 1
-	`, queryEmbedding).Scan(
-		&answer.ID,
-		&answer.Question,
-		&answer.Answer,
-		&answer.Category,
-		(*pqStringArray)(&tags),
-		&answer.Score,
-	)
-	if err == sql.ErrNoRows {
-		return nil, errors.New("knowledge base is empty")
-	}
+		LIMIT $2
+	`, queryEmbedding, limit)
 	if err != nil {
 		return nil, err
 	}
-	answer.Tags = tags
-	return &answer, nil
+	defer rows.Close()
+
+	var answers []Answer
+	for rows.Next() {
+		var answer Answer
+		var tags []string
+		if err := rows.Scan(
+			&answer.ID,
+			&answer.Question,
+			&answer.Answer,
+			&answer.Category,
+			(*pqStringArray)(&tags),
+			&answer.Score,
+		); err != nil {
+			return nil, err
+		}
+		answer.Tags = tags
+		answers = append(answers, answer)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(answers) == 0 {
+		return nil, errors.New("knowledge base is empty")
+	}
+	return answers, nil
 }
 
 type pqStringArray []string

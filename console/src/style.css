@@ -146,6 +146,112 @@ body {
   margin-top: 14px;
 }
 
+.candidate-section {
+  margin-top: 18px;
+}
+
+.candidate-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.candidate-title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.candidate-title span {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.candidate-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.candidate-rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #155bd4;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.candidate-body {
+  min-width: 0;
+}
+
+.candidate-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.candidate-head strong {
+  min-width: 0;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.candidate-head span {
+  flex: 0 0 auto;
+  color: #155bd4;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.candidate-body p {
+  display: -webkit-box;
+  margin: 8px 0 0;
+  overflow: hidden;
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.candidate-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.candidate-foot span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .console-page {
     padding: 18px;
@@ -171,6 +277,17 @@ body {
   }
 
   .panel-title span {
+    white-space: normal;
+  }
+
+  .candidate-title,
+  .candidate-head,
+  .candidate-foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .candidate-foot span {
     white-space: normal;
   }
 }

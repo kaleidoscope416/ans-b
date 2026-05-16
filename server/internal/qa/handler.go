@@ -21,6 +21,7 @@ func (h *Handler) RegisterRoutes(group *gin.RouterGroup) {
 func (h *Handler) Ask(c *gin.Context) {
 	var request struct {
 		Question string `json:"question"`
+		Limit    int    `json:"limit"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -31,7 +32,7 @@ func (h *Handler) Ask(c *gin.Context) {
 		return
 	}
 
-	answer, err := h.service.Ask(c.Request.Context(), request.Question)
+	answer, err := h.service.Ask(c.Request.Context(), request.Question, request.Limit)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    40000,

@@ -21,7 +21,7 @@ const askLoading = ref(false)
 const submitMessage = ref('')
 const submitError = ref('')
 const askError = ref('')
-const answer = ref(null)
+const askResult = ref(null)
 
 const canSubmitKnowledge = computed(() => (
   knowledgeForm.question.trim() &&
@@ -86,11 +86,12 @@ async function askQuestion() {
 
   askLoading.value = true
   askError.value = ''
-  answer.value = null
+  askResult.value = null
 
   try {
-    answer.value = await postJSON('/api/v1/qa/ask', {
+    askResult.value = await postJSON('/api/v1/qa/ask', {
       question: askForm.question.trim(),
+      limit: 5,
     })
   } catch (error) {
     askError.value = error.message
@@ -227,23 +228,52 @@ async function askQuestion() {
           :message="askError"
         />
 
-        <div v-if="answer" class="answer-box">
+        <div v-if="askResult?.answer" class="answer-box">
           <div class="answer-meta">
             <t-tag theme="success" variant="light">
-              {{ answer.category || '未分类' }}
+              {{ askResult.answer.category || '未分类' }}
             </t-tag>
-            <span>相似度 {{ Number(answer.score || 0).toFixed(4) }}</span>
+            <span>相似度 {{ Number(askResult.answer.score || 0).toFixed(4) }}</span>
           </div>
-          <h3>{{ answer.matched_question }}</h3>
-          <p>{{ answer.answer }}</p>
-          <div v-if="answer.tags?.length" class="tag-list">
+          <h3>{{ askResult.answer.matched_question }}</h3>
+          <p>{{ askResult.answer.answer }}</p>
+          <div v-if="askResult.answer.tags?.length" class="tag-list">
             <t-tag
-              v-for="tag in answer.tags"
+              v-for="tag in askResult.answer.tags"
               :key="tag"
               variant="light"
             >
               {{ tag }}
             </t-tag>
+          </div>
+        </div>
+
+        <div v-if="askResult?.candidates?.length" class="candidate-section">
+          <div class="candidate-title">
+            <h3>候选结果</h3>
+            <span>相似度 = 1 - 余弦距离，越接近 1 越相关</span>
+          </div>
+          <div class="candidate-list">
+            <div
+              v-for="(item, index) in askResult.candidates"
+              :key="item.id"
+              class="candidate-item"
+            >
+              <div class="candidate-rank">{{ index + 1 }}</div>
+              <div class="candidate-body">
+                <div class="candidate-head">
+                  <strong>{{ item.matched_question }}</strong>
+                  <span>{{ Number(item.score || 0).toFixed(4) }}</span>
+                </div>
+                <p>{{ item.answer }}</p>
+                <div class="candidate-foot">
+                  <t-tag size="small" variant="light">
+                    {{ item.category || '未分类' }}
+                  </t-tag>
+                  <span v-if="item.tags?.length">{{ item.tags.join(' / ') }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

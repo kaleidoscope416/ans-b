@@ -10,7 +10,7 @@ import (
 )
 
 type SearchRepository interface {
-	SearchBest(ctx context.Context, queryEmbedding string) (*Answer, error)
+	SearchTop(ctx context.Context, queryEmbedding string, limit int) ([]Answer, error)
 }
 
 type Embedder interface {
@@ -31,14 +31,25 @@ type Answer struct {
 	Score    float64  `json:"score"`
 }
 
+type AskResult struct {
+	Answer     Answer   `json:"answer"`
+	Candidates []Answer `json:"candidates"`
+}
+
 func NewService(repository SearchRepository, embedder Embedder) *Service {
 	return &Service{repository: repository, embedder: embedder}
 }
 
-func (s *Service) Ask(ctx context.Context, question string) (*Answer, error) {
+func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResult, error) {
 	question = strings.TrimSpace(question)
 	if question == "" {
 		return nil, errors.New("question is required")
+	}
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 10 {
+		limit = 10
 	}
 
 	if s.embedder == nil {
@@ -53,12 +64,15 @@ func (s *Service) Ask(ctx context.Context, question string) (*Answer, error) {
 	}
 
 	queryEmbedding := embedding.VectorLiteral(embeddings[0])
-	answer, err := s.repository.SearchBest(ctx, queryEmbedding)
+	candidates, err := s.repository.SearchTop(ctx, queryEmbedding, limit)
 	if err != nil {
 		return nil, err
 	}
-	if answer == nil {
+	if len(candidates) == 0 {
 		return nil, errors.New("no relevant answer found")
 	}
-	return answer, nil
+	return &AskResult{
+		Answer:     candidates[0],
+		Candidates: candidates,
+	}, nil
 }
