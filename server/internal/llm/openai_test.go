@@ -79,7 +79,7 @@ func TestOpenAICompatibleClientGenerateAnswerPostsCandidates(t *testing.T) {
 		t.Fatalf("expected 2 messages, got %d", len(gotRequest.Messages))
 	}
 	systemPrompt := gotRequest.Messages[0].Content
-	for _, want := range []string{"星野小春", "暂时无法确认", "禁止编造"} {
+	for _, want := range []string{"星见 遥", "暂时无法确认", "禁止编造"} {
 		if !strings.Contains(systemPrompt, want) {
 			t.Fatalf("expected system prompt to contain %q, got:\n%s", want, systemPrompt)
 		}
