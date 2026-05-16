@@ -32,20 +32,21 @@ func TestRegisterRoutesAddsTodoEndpoints(t *testing.T) {
 	tests := []struct {
 		method string
 		path   string
+		want   int
 	}{
-		{http.MethodPost, "/api/v1/auth/student/login"},
-		{http.MethodPost, "/api/v1/auth/admin/login"},
-		{http.MethodPost, "/api/v1/users/register"},
-		{http.MethodGet, "/api/v1/users/me"},
-		{http.MethodGet, "/api/v1/knowledge"},
-		{http.MethodPost, "/api/v1/knowledge"},
-		{http.MethodPost, "/api/v1/qa/ask"},
-		{http.MethodGet, "/api/v1/search/candidates"},
-		{http.MethodPost, "/api/v1/submissions"},
-		{http.MethodGet, "/api/v1/submissions"},
-		{http.MethodGet, "/api/v1/analytics/hot-questions"},
-		{http.MethodPost, "/api/v1/model/embeddings"},
-		{http.MethodPost, "/api/v1/storage/imports"},
+		{http.MethodPost, "/api/v1/auth/student/login", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/auth/admin/login", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/users/register", http.StatusNotImplemented},
+		{http.MethodGet, "/api/v1/users/me", http.StatusNotImplemented},
+		{http.MethodGet, "/api/v1/knowledge", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/knowledge", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/qa/ask", http.StatusBadRequest},
+		{http.MethodGet, "/api/v1/search/candidates", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/submissions", http.StatusNotImplemented},
+		{http.MethodGet, "/api/v1/submissions", http.StatusNotImplemented},
+		{http.MethodGet, "/api/v1/analytics/hot-questions", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/model/embeddings", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/storage/imports", http.StatusNotImplemented},
 	}
 
 	for _, tt := range tests {
@@ -55,8 +56,8 @@ func TestRegisterRoutesAddsTodoEndpoints(t *testing.T) {
 
 			engine.ServeHTTP(recorder, request)
 
-			if recorder.Code != http.StatusNotImplemented {
-				t.Fatalf("expected %s %s to return 501, got %d", tt.method, tt.path, recorder.Code)
+			if recorder.Code != tt.want {
+				t.Fatalf("expected %s %s to return %d, got %d", tt.method, tt.path, tt.want, recorder.Code)
 			}
 		})
 	}

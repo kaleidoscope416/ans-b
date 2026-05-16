@@ -1,6 +1,7 @@
 package router
 
 import (
+	"database/sql"
 	"net/http"
 
 	"ans-b/server/internal/analytics"
@@ -17,6 +18,10 @@ import (
 )
 
 func RegisterRoutes(engine *gin.Engine) {
+	RegisterRoutesWithDB(engine, nil)
+}
+
+func RegisterRoutesWithDB(engine *gin.Engine, db *sql.DB) {
 	engine.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "ok",
@@ -28,7 +33,7 @@ func RegisterRoutes(engine *gin.Engine) {
 	auth.NewHandler(auth.NewService(auth.NewRepository())).RegisterRoutes(api.Group("/auth"))
 	user.NewHandler(user.NewService(user.NewRepository())).RegisterRoutes(api.Group("/users"))
 	knowledge.NewHandler(knowledge.NewService(knowledge.NewRepository())).RegisterRoutes(api.Group("/knowledge"))
-	qa.NewHandler(qa.NewService(qa.NewRepository())).RegisterRoutes(api.Group("/qa"))
+	qa.NewHandler(qa.NewService(qa.NewRepository(db))).RegisterRoutes(api.Group("/qa"))
 	search.NewHandler(search.NewService(search.NewRepository())).RegisterRoutes(api.Group("/search"))
 	submission.NewHandler(submission.NewService(submission.NewRepository())).RegisterRoutes(api.Group("/submissions"))
 	analytics.NewHandler(analytics.NewService(analytics.NewRepository())).RegisterRoutes(api.Group("/analytics"))
