@@ -26,3 +26,8 @@ pnpm-debug.log*
 Thumbs.db
 .idea/
 .vscode/
+
+# Data files (large raw datasets, not tracked)
+beifen.json
+data/_scut_pages.json
+data/scut_pages.json
