@@ -10,11 +10,14 @@ func TestServiceAskReturnsBestVectorAnswer(t *testing.T) {
 	repo := &fakeRepository{
 		results: []Answer{
 			{
-				ID:       7,
-				Question: "一食堂营业时间是什么？",
-				Answer:   "一食堂晚餐营业至 20:00。",
-				Category: "餐饮服务",
-				Score:    0.72,
+				ID:        7,
+				ChunkID:   17,
+				ItemID:    7,
+				Question:  "一食堂营业时间是什么？",
+				Answer:    "一食堂晚餐营业至 20:00。",
+				ChunkText: "一食堂晚餐营业至 20:00。",
+				Category:  "餐饮服务",
+				Score:     0.72,
 			},
 			{
 				ID:       8,
@@ -37,6 +40,12 @@ func TestServiceAskReturnsBestVectorAnswer(t *testing.T) {
 	}
 	if result.Answer == nil || result.Answer.Answer != "一食堂晚餐营业至 20:00。" {
 		t.Fatalf("unexpected answer: %#v", result.Answer)
+	}
+	if result.Answer.ChunkID != 17 || result.Answer.ItemID != 7 {
+		t.Fatalf("expected best answer to include chunk identity, got %#v", result.Answer)
+	}
+	if result.Answer.ChunkText != "一食堂晚餐营业至 20:00。" {
+		t.Fatalf("expected best answer to include chunk text, got %q", result.Answer.ChunkText)
 	}
 	if len(result.Candidates) != 2 {
 		t.Fatalf("expected 2 candidates, got %d", len(result.Candidates))

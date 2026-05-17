@@ -12,6 +12,7 @@ import (
 )
 
 type Item struct {
+	Title    string   `json:"title"`
 	Question string   `json:"question"`
 	Answer   string   `json:"answer"`
 	Category string   `json:"category"`
@@ -20,8 +21,26 @@ type Item struct {
 	Remark   string   `json:"remark"`
 }
 
+type KnowledgeRecord struct {
+	Title      string
+	Question   string
+	Answer     string
+	Category   string
+	Tags       []string
+	Source     string
+	Remark     string
+	SourceType string
+	Chunks     []KnowledgeChunk
+}
+
+type KnowledgeChunk struct {
+	Text      string
+	Embedding string
+	SourceURL string
+}
+
 type Repository interface {
-	InsertKnowledge(ctx context.Context, item Item, chunkText string, embedding string) error
+	InsertKnowledge(ctx context.Context, record KnowledgeRecord) error
 }
 
 type Embedder interface {
@@ -57,12 +76,15 @@ func ImportItems(ctx context.Context, repo Repository, embedder Embedder, items 
 		return 0, errors.New("embedder is required")
 	}
 
+	records := make([]KnowledgeRecord, 0, len(items))
 	chunkTexts := make([]string, 0, len(items))
 	for _, item := range items {
-		if err := validateItem(item); err != nil {
+		record, err := BuildRecord(item)
+		if err != nil {
 			return 0, err
 		}
-		chunkTexts = append(chunkTexts, BuildChunkText(item))
+		records = append(records, record)
+		chunkTexts = append(chunkTexts, record.Chunks[0].Text)
 	}
 
 	embeddings, err := embedder.Embed(ctx, chunkTexts)
@@ -74,13 +96,38 @@ func ImportItems(ctx context.Context, repo Repository, embedder Embedder, items 
 	}
 
 	count := 0
-	for i, item := range items {
-		if err := repo.InsertKnowledge(ctx, item, chunkTexts[i], embedding.VectorLiteral(embeddings[i])); err != nil {
+	for i := range records {
+		records[i].Chunks[0].Embedding = embedding.VectorLiteral(embeddings[i])
+		if err := repo.InsertKnowledge(ctx, records[i]); err != nil {
 			return count, err
 		}
 		count++
 	}
 	return count, nil
+}
+
+func BuildRecord(item Item) (KnowledgeRecord, error) {
+	if err := validateItem(item); err != nil {
+		return KnowledgeRecord{}, err
+	}
+	title := strings.TrimSpace(item.Title)
+	question := strings.TrimSpace(item.Question)
+	if title == "" {
+		title = question
+	}
+	return KnowledgeRecord{
+		Title:      title,
+		Question:   question,
+		Answer:     strings.TrimSpace(item.Answer),
+		Category:   strings.TrimSpace(item.Category),
+		Tags:       cleanTags(item.Tags),
+		Source:     strings.TrimSpace(item.Source),
+		Remark:     strings.TrimSpace(item.Remark),
+		SourceType: "faq",
+		Chunks: []KnowledgeChunk{
+			{Text: BuildChunkText(item)},
+		},
+	}, nil
 }
 
 func BuildChunkText(item Item) string {

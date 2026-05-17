@@ -99,6 +99,14 @@ async function askQuestion() {
     askLoading.value = false
   }
 }
+
+function candidateTitle(item) {
+  return item?.title || item?.matched_question || `知识 #${item?.item_id || item?.id || ''}`
+}
+
+function candidateBody(item) {
+  return item?.chunk_text || item?.answer || ''
+}
 </script>
 
 <template>
@@ -257,8 +265,17 @@ async function askQuestion() {
             </t-tag>
             <span>相似度 {{ Number(askResult.answer.score || 0).toFixed(4) }}</span>
           </div>
-          <h3>{{ askResult.answer.matched_question }}</h3>
-          <p>{{ askResult.answer.answer }}</p>
+          <h3>{{ candidateTitle(askResult.answer) }}</h3>
+          <p>{{ candidateBody(askResult.answer) }}</p>
+          <a
+            v-if="askResult.answer.source_url"
+            class="source-link"
+            :href="askResult.answer.source_url"
+            target="_blank"
+            rel="noreferrer"
+          >
+            查看来源
+          </a>
           <div v-if="askResult.answer.tags?.length" class="tag-list">
             <t-tag
               v-for="tag in askResult.answer.tags"
@@ -278,21 +295,31 @@ async function askQuestion() {
           <div class="candidate-list">
             <div
               v-for="(item, index) in askResult.candidates"
-              :key="item.id"
+              :key="item.chunk_id || item.id"
               class="candidate-item"
             >
               <div class="candidate-rank">{{ index + 1 }}</div>
               <div class="candidate-body">
                 <div class="candidate-head">
-                  <strong>{{ item.matched_question }}</strong>
+                  <strong>{{ candidateTitle(item) }}</strong>
                   <span>{{ Number(item.score || 0).toFixed(4) }}</span>
                 </div>
-                <p>{{ item.answer }}</p>
+                <p>{{ candidateBody(item) }}</p>
                 <div class="candidate-foot">
                   <t-tag size="small" variant="light">
                     {{ item.category || '未分类' }}
                   </t-tag>
+                  <span v-if="item.chunk_id">片段 #{{ item.chunk_id }}</span>
                   <span v-if="item.tags?.length">{{ item.tags.join(' / ') }}</span>
+                  <a
+                    v-if="item.source_url"
+                    class="source-link"
+                    :href="item.source_url"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    来源
+                  </a>
                 </div>
               </div>
             </div>

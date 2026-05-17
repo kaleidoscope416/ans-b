@@ -25,8 +25,13 @@ func (r *Repository) SearchTop(ctx context.Context, queryEmbedding string, limit
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
 			ki.id,
+			kc.item_id,
+			kc.id,
+			ki.title,
 			ki.question,
 			ki.answer,
+			kc.chunk_text,
+			COALESCE(kc.source_url, '') AS source_url,
 			COALESCE(ki.category, '') AS category,
 			COALESCE(ki.tags, ARRAY[]::text[]) AS tags,
 			1 - (kc.embedding <=> $1::vector) AS score
@@ -48,8 +53,13 @@ func (r *Repository) SearchTop(ctx context.Context, queryEmbedding string, limit
 		var tags []string
 		if err := rows.Scan(
 			&answer.ID,
+			&answer.ItemID,
+			&answer.ChunkID,
+			&answer.Title,
 			&answer.Question,
 			&answer.Answer,
+			&answer.ChunkText,
+			&answer.SourceURL,
 			&answer.Category,
 			(*pqStringArray)(&tags),
 			&answer.Score,

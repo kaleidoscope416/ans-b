@@ -31,12 +31,17 @@ type Service struct {
 }
 
 type Answer struct {
-	ID       int64    `json:"id"`
-	Question string   `json:"matched_question"`
-	Answer   string   `json:"answer"`
-	Category string   `json:"category"`
-	Tags     []string `json:"tags"`
-	Score    float64  `json:"score"`
+	ID        int64    `json:"id"`
+	ItemID    int64    `json:"item_id"`
+	ChunkID   int64    `json:"chunk_id"`
+	Title     string   `json:"title"`
+	Question  string   `json:"matched_question"`
+	Answer    string   `json:"answer"`
+	ChunkText string   `json:"chunk_text"`
+	SourceURL string   `json:"source_url"`
+	Category  string   `json:"category"`
+	Tags      []string `json:"tags"`
+	Score     float64  `json:"score"`
 }
 
 type AskResult struct {

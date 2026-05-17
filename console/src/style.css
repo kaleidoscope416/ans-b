@@ -267,6 +267,16 @@ body {
   white-space: nowrap;
 }
 
+.source-link {
+  color: #0052d9;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.source-link:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 900px) {
   .console-page {
     padding: 18px;
