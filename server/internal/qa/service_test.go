@@ -190,6 +190,90 @@ func TestServiceAskDoesNotCallAIWhenBelowMinScore(t *testing.T) {
 	}
 }
 
+func TestServiceAskIncrementsAccessWhenAnswered(t *testing.T) {
+	repo := &fakeRepository{
+		results: []Answer{
+			{
+				ItemID:   42,
+				Question: "图书馆几点关门？",
+				Answer:   "图书馆 22:00 闭馆。",
+				Score:    0.81,
+			},
+		},
+	}
+	embedder := &fakeEmbedder{embedding: []float64{0.1, 0.2, 0.3}}
+	recorder := &fakeAccessRecorder{}
+	service := NewService(repo, embedder)
+	service.SetAccessRecorder(recorder)
+
+	result, err := service.Ask(context.Background(), "图书馆几点关门？", 5)
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if !result.Answered {
+		t.Fatal("expected result to be answered")
+	}
+	if recorder.itemID != 42 || recorder.calls != 1 {
+		t.Fatalf("expected access count for item 42 once, got item %d calls %d", recorder.itemID, recorder.calls)
+	}
+}
+
+func TestServiceAskDoesNotIncrementAccessWhenBelowMinScore(t *testing.T) {
+	repo := &fakeRepository{
+		results: []Answer{
+			{
+				ItemID:   42,
+				Question: "图书馆几点关门？",
+				Answer:   "图书馆 22:00 闭馆。",
+				Score:    0.2,
+			},
+		},
+	}
+	embedder := &fakeEmbedder{embedding: []float64{0.1, 0.2, 0.3}}
+	recorder := &fakeAccessRecorder{}
+	service := NewService(repo, embedder)
+	service.SetAccessRecorder(recorder)
+
+	result, err := service.Ask(context.Background(), "unknown", 5)
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if result.Answered {
+		t.Fatal("expected result to be unanswered")
+	}
+	if recorder.calls != 0 {
+		t.Fatalf("expected no access count increment, got %d", recorder.calls)
+	}
+}
+
+func TestServiceAskIgnoresAccessRecorderError(t *testing.T) {
+	repo := &fakeRepository{
+		results: []Answer{
+			{
+				ItemID:   42,
+				Question: "图书馆几点关门？",
+				Answer:   "图书馆 22:00 闭馆。",
+				Score:    0.81,
+			},
+		},
+	}
+	embedder := &fakeEmbedder{embedding: []float64{0.1, 0.2, 0.3}}
+	recorder := &fakeAccessRecorder{err: errors.New("database unavailable")}
+	service := NewService(repo, embedder)
+	service.SetAccessRecorder(recorder)
+
+	result, err := service.Ask(context.Background(), "图书馆几点关门？", 5)
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if !result.Answered {
+		t.Fatal("expected result to be answered")
+	}
+	if recorder.calls != 1 {
+		t.Fatalf("expected recorder to be called once, got %d", recorder.calls)
+	}
+}
+
 func TestServiceAskRejectsEmptyQuestion(t *testing.T) {
 	service := NewService(&fakeRepository{}, &fakeEmbedder{})
 
@@ -233,4 +317,16 @@ func (g *fakeGenerator) GenerateAnswer(ctx context.Context, question string, can
 	g.question = question
 	g.candidates = candidates
 	return g.answer, g.err
+}
+
+type fakeAccessRecorder struct {
+	calls  int
+	itemID int64
+	err    error
+}
+
+func (r *fakeAccessRecorder) IncrementKnowledgeAccess(ctx context.Context, itemID int64) error {
+	r.calls++
+	r.itemID = itemID
+	return r.err
 }

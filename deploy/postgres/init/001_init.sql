@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS knowledge_items (
   tags text[],
   source_type varchar(32) NOT NULL DEFAULT 'faq',
   status varchar(32) NOT NULL DEFAULT 'approved',
+  access_count bigint NOT NULL DEFAULT 0,
+  last_accessed_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -74,6 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_items_status ON knowledge_items(status)
 CREATE INDEX IF NOT EXISTS idx_knowledge_items_category ON knowledge_items(category);
 CREATE INDEX IF NOT EXISTS idx_knowledge_items_source_type ON knowledge_items(source_type);
 CREATE INDEX IF NOT EXISTS idx_knowledge_items_created_at ON knowledge_items(created_at);
+CREATE INDEX IF NOT EXISTS idx_knowledge_items_access_count ON knowledge_items(access_count DESC);
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_item_id ON knowledge_chunks(item_id);
 

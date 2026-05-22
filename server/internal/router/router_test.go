@@ -38,7 +38,7 @@ func TestRegisterRoutesHandlesCORSPreflight(t *testing.T) {
 			request := httptest.NewRequest(http.MethodOptions, "/api/v1/qa/ask", nil)
 			request.Header.Set("Origin", origin)
 			request.Header.Set("Access-Control-Request-Method", "POST")
-			request.Header.Set("Access-Control-Request-Headers", "content-type")
+			request.Header.Set("Access-Control-Request-Headers", "content-type,authorization")
 			engine.ServeHTTP(recorder, request)
 
 			if recorder.Code != http.StatusNoContent {
@@ -46,6 +46,9 @@ func TestRegisterRoutesHandlesCORSPreflight(t *testing.T) {
 			}
 			if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != origin {
 				t.Fatalf("expected CORS origin header %q, got %q", origin, got)
+			}
+			if got := recorder.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Authorization" {
+				t.Fatalf("expected CORS headers to allow authorization, got %q", got)
 			}
 		})
 	}
@@ -62,13 +65,13 @@ func TestRegisterRoutesAddsTodoEndpoints(t *testing.T) {
 		path   string
 		want   int
 	}{
-		{http.MethodPost, "/api/v1/auth/student/login", http.StatusNotImplemented},
-		{http.MethodPost, "/api/v1/auth/admin/login", http.StatusNotImplemented},
-		{http.MethodPost, "/api/v1/users/register", http.StatusNotImplemented},
-		{http.MethodGet, "/api/v1/users/me", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/auth/student/login", http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/auth/admin/login", http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/users/register", http.StatusBadRequest},
+		{http.MethodGet, "/api/v1/users/me", http.StatusUnauthorized},
 		{http.MethodGet, "/api/v1/knowledge", http.StatusNotImplemented},
 		{http.MethodPost, "/api/v1/knowledge", http.StatusBadRequest},
-		{http.MethodPost, "/api/v1/qa/ask", http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/qa/ask", http.StatusUnauthorized},
 		{http.MethodGet, "/api/v1/search/candidates", http.StatusNotImplemented},
 		{http.MethodPost, "/api/v1/submissions", http.StatusNotImplemented},
 		{http.MethodGet, "/api/v1/submissions", http.StatusNotImplemented},
