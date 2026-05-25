@@ -23,11 +23,16 @@ type AnswerGenerator interface {
 	GenerateAnswer(ctx context.Context, question string, candidates []Answer, minScore float64) (string, error)
 }
 
+type AccessRecorder interface {
+	IncrementKnowledgeAccess(ctx context.Context, itemID int64) error
+}
+
 type Service struct {
-	repository SearchRepository
-	embedder   Embedder
-	generator  AnswerGenerator
-	minScore   float64
+	repository     SearchRepository
+	embedder       Embedder
+	generator      AnswerGenerator
+	accessRecorder AccessRecorder
+	minScore       float64
 }
 
 type Answer struct {
@@ -64,6 +69,10 @@ func NewService(repository SearchRepository, embedder Embedder, generators ...An
 		service.generator = generators[0]
 	}
 	return service
+}
+
+func (s *Service) SetAccessRecorder(recorder AccessRecorder) {
+	s.accessRecorder = recorder
 }
 
 func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResult, error) {
@@ -104,6 +113,7 @@ func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResu
 	}
 	if result.Answered {
 		result.Answer = &candidates[0]
+		s.incrementAccess(ctx, candidates[0].ItemID)
 	}
 	if result.Answered && s.generator != nil {
 		result.AIEnabled = true
@@ -115,6 +125,13 @@ func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResu
 		result.AIAnswer = strings.TrimSpace(aiAnswer)
 	}
 	return result, nil
+}
+
+func (s *Service) incrementAccess(ctx context.Context, itemID int64) {
+	if s.accessRecorder == nil || itemID <= 0 {
+		return
+	}
+	_ = s.accessRecorder.IncrementKnowledgeAccess(ctx, itemID)
 }
 
 func defaultMinScore() float64 {
