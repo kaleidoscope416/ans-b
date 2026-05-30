@@ -24,6 +24,7 @@ type Claims struct {
 	UserID    int64
 	Username  string
 	Role      string
+	SessionID string
 	ExpiresAt time.Time
 }
 
@@ -50,9 +51,12 @@ func NewTokenManager(secret string, ttl time.Duration) *TokenManager {
 	return &TokenManager{secret: []byte(secret), ttl: ttl}
 }
 
-func (m *TokenManager) Sign(userID int64, username, role string) (string, int64, error) {
+func (m *TokenManager) Sign(userID int64, username, role, sessionID string) (string, int64, error) {
 	if err := m.ready(); err != nil {
 		return "", 0, err
+	}
+	if strings.TrimSpace(sessionID) == "" {
+		return "", 0, errors.New("session id is required")
 	}
 
 	expiresAt := time.Now().Add(m.ttl)
@@ -61,6 +65,7 @@ func (m *TokenManager) Sign(userID int64, username, role string) (string, int64,
 		"sub":      strconv.FormatInt(userID, 10),
 		"username": username,
 		"role":     role,
+		"sid":      sessionID,
 		"exp":      expiresAt.Unix(),
 	}
 	headerPart, err := encodeJWTPart(header)
@@ -105,6 +110,7 @@ func (m *TokenManager) Verify(token string) (*Claims, error) {
 		Subject  string `json:"sub"`
 		Username string `json:"username"`
 		Role     string `json:"role"`
+		Session  string `json:"sid"`
 		Expires  int64  `json:"exp"`
 	}
 	if err := decodeJWTPart(parts[1], &payload); err != nil {
@@ -121,10 +127,14 @@ func (m *TokenManager) Verify(token string) (*Claims, error) {
 	if payload.Role != RoleStudent && payload.Role != RoleAdmin {
 		return nil, errors.New("invalid token role")
 	}
+	if strings.TrimSpace(payload.Session) == "" {
+		return nil, errors.New("invalid token session")
+	}
 	return &Claims{
 		UserID:    userID,
 		Username:  payload.Username,
 		Role:      payload.Role,
+		SessionID: payload.Session,
 		ExpiresAt: expiresAt,
 	}, nil
 }

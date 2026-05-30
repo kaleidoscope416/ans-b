@@ -54,6 +54,7 @@
 | 桌面客户端 | Wails v2 + Vue 3 |
 | 后端服务 | Go + Gin |
 | 数据库 | PostgreSQL |
+| 登录状态 | Redis |
 | 向量检索 | pgvector |
 | Embedding 服务 | FastAPI + sentence-transformers |
 | Embedding 模型 | `BAAI/bge-large-zh-v1.5` |
@@ -82,7 +83,7 @@ WSL 环境请参考：
 常用命令：
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d postgres embed-server
+docker compose -f deploy/docker-compose.yml up -d postgres redis embed-server
 cp .env.example .env
 make server
 make console
@@ -95,3 +96,5 @@ OPENAI_BASE_URL=https://api.kimi.com/coding/v1
 OPENAI_MODEL=kimi-for-coding
 OPENAI_API_KEY=replace-with-your-api-key
 ```
+
+后端登录状态存储在 Redis 中，默认连接 `localhost:6379`，可通过 `.env` 中的 `REDIS_ADDR`、`REDIS_PASSWORD`、`REDIS_DB` 调整。

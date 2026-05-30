@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -32,10 +33,11 @@ type LoginResult struct {
 type Service struct {
 	repository *Repository
 	tokens     *TokenManager
+	sessions   SessionStore
 }
 
-func NewService(repository *Repository, tokens *TokenManager) *Service {
-	return &Service{repository: repository, tokens: tokens}
+func NewService(repository *Repository, tokens *TokenManager, sessions SessionStore) *Service {
+	return &Service{repository: repository, tokens: tokens, sessions: sessions}
 }
 
 func (s *Service) LoginStudent(ctx context.Context, input LoginInput) (*LoginResult, error) {
@@ -57,6 +59,9 @@ func (s *Service) login(ctx context.Context, input LoginInput, role string) (*Lo
 	if s.tokens == nil {
 		return nil, errors.New("token manager is not configured")
 	}
+	if s.sessions == nil {
+		return nil, errors.New("session store is not configured")
+	}
 
 	var account *Account
 	var err error
@@ -75,12 +80,43 @@ func (s *Service) login(ctx context.Context, input LoginInput, role string) (*Lo
 		return nil, ErrInvalidCredentials
 	}
 
-	token, expiresIn, err := s.tokens.Sign(account.ID, account.Username, account.Role)
+	sessionID, err := NewSessionID()
 	if err != nil {
+		return nil, err
+	}
+	token, expiresIn, err := s.tokens.Sign(account.ID, account.Username, account.Role, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	expiresAt := time.Now().Add(time.Duration(expiresIn) * time.Second)
+	if err := s.sessions.Create(ctx, Session{
+		ID:        sessionID,
+		UserID:    account.ID,
+		Username:  account.Username,
+		Role:      account.Role,
+		ExpiresAt: expiresAt,
+	}, time.Duration(expiresIn)*time.Second); err != nil {
 		return nil, err
 	}
 	account.PasswordHash = ""
 	return &LoginResult{Token: token, ExpiresIn: expiresIn, User: *account}, nil
+}
+
+func (s *Service) Logout(ctx context.Context, token string) error {
+	if s == nil {
+		return errors.New("auth service is not configured")
+	}
+	if s.tokens == nil {
+		return errors.New("token manager is not configured")
+	}
+	if s.sessions == nil {
+		return errors.New("session store is not configured")
+	}
+	claims, err := s.tokens.Verify(token)
+	if err != nil {
+		return err
+	}
+	return s.sessions.Delete(ctx, claims.SessionID)
 }
 
 func HashPassword(password string) (string, error) {

@@ -18,6 +18,20 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: campus-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - campus_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   embed-server:
     build:
       context: ./embed-server
@@ -41,4 +55,5 @@ services:
 
 volumes:
   campus_postgres_data:
+  campus_redis_data:
   campus_embed_models:
