@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"os"
 
+	"ans-b/server/internal/auth"
 	"ans-b/server/internal/embedding"
 	"ans-b/server/internal/llm"
 	"ans-b/server/internal/router"
@@ -33,6 +35,11 @@ func main() {
 		embedBaseURL = "http://127.0.0.1:18080"
 	}
 	embedder := embedding.NewHTTPClient(embedBaseURL)
+	tokenManager := auth.NewTokenManagerFromEnv()
+	authService := auth.NewService(auth.NewRepository(db), tokenManager)
+	if err := authService.InitAuthSystem(context.Background()); err != nil {
+		log.Fatalf("failed to initialize auth system: %v", err)
+	}
 	answerGenerator := llm.NewOpenAICompatibleFromEnv()
 
 	engine := gin.Default()

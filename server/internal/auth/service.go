@@ -38,6 +38,19 @@ func NewService(repository *Repository, tokens *TokenManager) *Service {
 	return &Service{repository: repository, tokens: tokens}
 }
 
+func (s *Service) InitAuthSystem(ctx context.Context) error {
+	if s == nil || s.repository == nil {
+		return errors.New("auth service is not configured")
+	}
+	if s.tokens == nil {
+		return errors.New("token manager is not configured")
+	}
+	if err := s.tokens.ready(); err != nil {
+		return err
+	}
+	return s.repository.InitAdminIfNeeded(ctx)
+}
+
 func (s *Service) LoginStudent(ctx context.Context, input LoginInput) (*LoginResult, error) {
 	return s.login(ctx, input, RoleStudent)
 }
@@ -48,7 +61,8 @@ func (s *Service) LoginAdmin(ctx context.Context, input LoginInput) (*LoginResul
 
 func (s *Service) login(ctx context.Context, input LoginInput, role string) (*LoginResult, error) {
 	username := strings.TrimSpace(input.Username)
-	if username == "" || strings.TrimSpace(input.Password) == "" {
+	password := strings.TrimSpace(input.Password)
+	if username == "" || password == "" {
 		return nil, ErrInvalidLoginInput
 	}
 	if s == nil || s.repository == nil {
@@ -71,7 +85,7 @@ func (s *Service) login(ctx context.Context, input LoginInput, role string) (*Lo
 		}
 		return nil, err
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(input.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
 		return nil, ErrInvalidCredentials
 	}
 
@@ -84,11 +98,18 @@ func (s *Service) login(ctx context.Context, input LoginInput, role string) (*Lo
 }
 
 func HashPassword(password string) (string, error) {
+	return HashPasswordWithCost(password, bcrypt.DefaultCost)
+}
+
+func HashPasswordWithCost(password string, cost int) (string, error) {
 	password = strings.TrimSpace(password)
 	if len(password) < 6 {
 		return "", errors.New("password must be at least 6 characters")
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if cost <= 0 {
+		cost = bcrypt.DefaultCost
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
 	if err != nil {
 		return "", err
 	}
