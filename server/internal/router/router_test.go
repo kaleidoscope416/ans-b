@@ -30,8 +30,8 @@ func TestRegisterRoutesHandlesCORSPreflight(t *testing.T) {
 	RegisterRoutes(engine)
 
 	for _, origin := range []string{
-		"http://127.0.0.1:5173",
-		"http://100.115.97.57:5173",
+		"http://127.0.0.1:23457",
+		"http://100.115.97.57:23457",
 	} {
 		t.Run(origin, func(t *testing.T) {
 			recorder := httptest.NewRecorder()

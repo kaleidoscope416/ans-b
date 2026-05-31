@@ -1,7 +1,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 
-const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:23456'
 
 const knowledgeForm = reactive({
   question: '',

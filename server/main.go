@@ -38,7 +38,7 @@ func main() {
 	engine := gin.Default()
 	router.RegisterRoutesWithDBAndEmbedder(engine, db, embedder, answerGenerator)
 
-	if err := engine.Run(); err != nil {
+	if err := engine.Run(":23456"); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
 }
