@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"ans-b/server/internal/embedding"
 )
@@ -76,6 +78,7 @@ func (s *Service) SetAccessRecorder(recorder AccessRecorder) {
 }
 
 func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResult, error) {
+	startedAt := time.Now()
 	question = strings.TrimSpace(question)
 	if question == "" {
 		return nil, errors.New("question is required")
@@ -90,19 +93,24 @@ func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResu
 	if s.embedder == nil {
 		return nil, errors.New("embedder is not configured")
 	}
+	log.Printf("qa ask start question=%q limit=%d", question, limit)
+	stageStartedAt := time.Now()
 	embeddings, err := s.embedder.Embed(ctx, []string{question})
 	if err != nil {
 		return nil, fmt.Errorf("embed question: %w", err)
 	}
+	log.Printf("qa ask embedding done question=%q elapsed=%s", question, time.Since(stageStartedAt))
 	if len(embeddings) != 1 {
 		return nil, fmt.Errorf("embedding count mismatch: got %d, want 1", len(embeddings))
 	}
 
 	queryEmbedding := embedding.VectorLiteral(embeddings[0])
+	stageStartedAt = time.Now()
 	candidates, err := s.repository.SearchTop(ctx, queryEmbedding, limit)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("qa ask search done question=%q candidates=%d elapsed=%s", question, len(candidates), time.Since(stageStartedAt))
 	if len(candidates) == 0 {
 		return nil, errors.New("no relevant answer found")
 	}
@@ -117,13 +125,17 @@ func (s *Service) Ask(ctx context.Context, question string, limit int) (*AskResu
 	}
 	if result.Answered && s.generator != nil {
 		result.AIEnabled = true
+		stageStartedAt = time.Now()
 		aiAnswer, err := s.generator.GenerateAnswer(ctx, question, candidates, s.minScore)
 		if err != nil {
 			result.AIError = err.Error()
+			log.Printf("qa ask ai error question=%q elapsed=%s error=%v", question, time.Since(stageStartedAt), err)
 			return result, nil
 		}
 		result.AIAnswer = strings.TrimSpace(aiAnswer)
+		log.Printf("qa ask ai done question=%q elapsed=%s", question, time.Since(stageStartedAt))
 	}
+	log.Printf("qa ask done question=%q answered=%t ai_enabled=%t elapsed=%s", question, result.Answered, result.AIEnabled, time.Since(startedAt))
 	return result, nil
 }
 

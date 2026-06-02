@@ -1,6 +1,10 @@
 <script setup>
-import { ref, reactive, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { AttachIcon, SendIcon, ChevronDownIcon } from 'tdesign-icons-vue-next'
+import { AskQuestion, Logout } from '../../wailsjs/go/main/App'
+import { errorMessage } from '../utils/errors'
+import { replaceMessage } from '../utils/messages'
+import assistantAvatar from '../assets/images/assistant-xiaobai.jpg'
 
 const props = defineProps({
   userName: {
@@ -15,7 +19,7 @@ const messages = ref([
   {
     id: 1,
     role: 'ai',
-    content: '你好！我是你的智能助手，有什么可以帮你的？',
+    content: '你好呀～我是小白，正在湖边等你呢。食堂、图书馆、校园卡、宿舍报修这些校园生活问题，都可以问我。',
     time: '10:30',
   },
 ])
@@ -23,8 +27,9 @@ const messages = ref([
 const inputText = ref('')
 const msgListRef = ref(null)
 const showDropdown = ref(false)
+const isSending = ref(false)
 
-const isInputEmpty = computed(() => !inputText.value.trim())
+const isInputEmpty = computed(() => !inputText.value.trim() || isSending.value)
 
 async function scrollToBottom() {
   await nextTick()
@@ -38,11 +43,36 @@ function getCurrentTime() {
   return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
 }
 
-function handleSend() {
-  const text = inputText.value.trim()
-  if (!text) return
+function formatScore(score) {
+  const value = Number(score || 0)
+  return value ? value.toFixed(4) : ''
+}
 
-  // 用户消息
+function getCandidateTitle(item) {
+  return item?.title || item?.matched_question || `知识 #${item?.item_id || item?.id || ''}`
+}
+
+function getCandidateBody(item) {
+  return item?.chunk_text || item?.answer || ''
+}
+
+function getAnswerText(result) {
+  return result?.ai_answer || getCandidateBody(result?.answer) || ''
+}
+
+function buildAnswerContent(result) {
+  const answer = getAnswerText(result)
+  if (answer) return answer
+  if (result && result.answered === false) {
+    return '未找到足够相关的答案。你可以换一种问法，或补充更具体的地点、时间、业务名称。'
+  }
+  return '接口已返回，但没有可展示的回答内容。'
+}
+
+async function handleSend() {
+  const text = inputText.value.trim()
+  if (!text || isSending.value) return
+
   messages.value.push({
     id: Date.now(),
     role: 'user',
@@ -52,16 +82,37 @@ function handleSend() {
   inputText.value = ''
   scrollToBottom()
 
-  // Mock AI 回复
-  setTimeout(() => {
-    messages.value.push({
-      id: Date.now() + 1,
-      role: 'ai',
-      content: `收到你的问题："${text}"\n\n这是一个 Mock 回复。在实际项目中，这里会调用后端 AI 接口返回真实回答。`,
+  const pendingMessage = {
+    id: Date.now() + 1,
+    role: 'ai',
+    content: '正在检索校园知识库...',
+    time: getCurrentTime(),
+    loading: true,
+  }
+  messages.value.push(pendingMessage)
+  isSending.value = true
+  scrollToBottom()
+
+  try {
+    const result = await AskQuestion(text, 5)
+    messages.value = replaceMessage(messages.value, pendingMessage.id, {
+      content: buildAnswerContent(result),
+      result,
+      aiError: result?.ai_error || '',
+      loading: false,
       time: getCurrentTime(),
     })
+  } catch (error) {
+    messages.value = replaceMessage(messages.value, pendingMessage.id, {
+      content: `问答接口请求失败：${errorMessage(error)}`,
+      error: true,
+      loading: false,
+      time: getCurrentTime(),
+    })
+  } finally {
+    isSending.value = false
     scrollToBottom()
-  }, 600)
+  }
 }
 
 function handleKeydown(e) {
@@ -77,6 +128,28 @@ function closeDropdown(e) {
   }
 }
 
+function answerMeta(result) {
+  const answer = result?.answer
+  if (!answer) return []
+  return [
+    answer.category || '未分类',
+    formatScore(answer.score) ? `相似度 ${formatScore(answer.score)}` : '',
+  ].filter(Boolean)
+}
+
+function candidateKey(item, index) {
+  return item?.chunk_id || item?.id || `${item?.item_id || 'candidate'}-${index}`
+}
+
+function topCandidates(result) {
+  return (result?.candidates || []).slice(0, 3)
+}
+
+function askCandidate(question) {
+  inputText.value = question
+  handleSend()
+}
+
 onMounted(() => {
   document.addEventListener('click', closeDropdown)
 })
@@ -87,6 +160,7 @@ onUnmounted(() => {
 
 function handleLogout() {
   showDropdown.value = false
+  Logout()
   emit('logout')
 }
 </script>
@@ -146,21 +220,50 @@ function handleLogout() {
         >
           <div class="msg-avatar">
             <div v-if="msg.role === 'ai'" class="ai-avatar">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="10" rx="2"/>
-                <circle cx="12" cy="5" r="2"/>
-                <path d="M12 7v4"/>
-                <line x1="8" y1="16" x2="8" y2="16"/>
-                <line x1="16" y1="16" x2="16" y2="16"/>
-              </svg>
+              <img :src="assistantAvatar" alt="小白" />
             </div>
             <div v-else class="user-avatar-small">
               {{ userName.charAt(0) }}
             </div>
           </div>
           <div class="msg-body">
-            <div class="msg-bubble">
-              {{ msg.content }}
+            <div class="msg-bubble" :class="{ loading: msg.loading, error: msg.error }">
+              <p class="msg-content">{{ msg.content }}</p>
+
+              <div v-if="msg.result" class="answer-details">
+                <div v-if="answerMeta(msg.result).length" class="answer-meta-row">
+                  <span
+                    v-for="meta in answerMeta(msg.result)"
+                    :key="meta"
+                    class="meta-pill"
+                  >
+                    {{ meta }}
+                  </span>
+                </div>
+
+                <p v-if="msg.aiError" class="ai-error">
+                  AI 回答生成失败，已展示知识库原始结果：{{ msg.aiError }}
+                </p>
+
+                <div v-if="msg.result.answer" class="matched-card">
+                  <strong>{{ getCandidateTitle(msg.result.answer) }}</strong>
+                  <p>{{ getCandidateBody(msg.result.answer) }}</p>
+                </div>
+
+                <div v-if="topCandidates(msg.result).length" class="candidate-panel">
+                  <div class="candidate-title">相关候选</div>
+                  <button
+                    v-for="(item, index) in topCandidates(msg.result)"
+                    :key="candidateKey(item, index)"
+                    class="candidate-item"
+                    @click="askCandidate(getCandidateTitle(item))"
+                  >
+                    <span>{{ index + 1 }}</span>
+                    <strong>{{ getCandidateTitle(item) }}</strong>
+                    <em>{{ formatScore(item.score) }}</em>
+                  </button>
+                </div>
+              </div>
             </div>
             <span class="msg-time">{{ msg.time }}</span>
           </div>
@@ -179,6 +282,7 @@ function handleLogout() {
           type="text"
           placeholder="输入问题，按 Enter 发送"
           class="chat-input"
+          :disabled="isSending"
           @keydown="handleKeydown"
         />
       </div>
@@ -427,10 +531,19 @@ function handleLogout() {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+  background: #E0F2FE;
+  border: 1px solid #DBEAFE;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.ai-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .user-avatar-small {
@@ -468,6 +581,20 @@ function handleLogout() {
   word-break: break-word;
 }
 
+.msg-content {
+  margin: 0;
+}
+
+.msg-bubble.loading {
+  color: #64748B;
+}
+
+.msg-bubble.error {
+  border-color: #FCA5A5;
+  background: #FEF2F2;
+  color: #B91C1C;
+}
+
 .msg-row.ai .msg-bubble {
   background: #FFFFFF;
   color: #1F2937;
@@ -484,6 +611,125 @@ function handleLogout() {
   border-top-right-radius: 2px;
   max-width: 70%;
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.15);
+}
+
+.answer-details {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  white-space: normal;
+}
+
+.answer-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #EEF2FF;
+  color: #4338CA;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ai-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #FFFBEB;
+  color: #92400E;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.matched-card {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+}
+
+.matched-card strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #0F172A;
+  font-size: 13px;
+}
+
+.matched-card p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.candidate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.candidate-title {
+  color: #64748B;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.candidate-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 180ms ease-out, background 180ms ease-out;
+}
+
+.candidate-item:hover {
+  border-color: #C7D2FE;
+  background: #F8FAFF;
+}
+
+.candidate-item span {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #EEF2FF;
+  color: #4F46E5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.candidate-item strong {
+  overflow: hidden;
+  color: #1E293B;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-item em {
+  color: #94A3B8;
+  font-size: 12px;
+  font-style: normal;
 }
 
 .msg-time {
@@ -563,6 +809,11 @@ function handleLogout() {
 .chat-input:focus {
   background: #EEF2FF;
   box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.chat-input:disabled {
+  cursor: not-allowed;
+  color: #64748B;
 }
 
 .send-btn {
@@ -650,11 +901,6 @@ function handleLogout() {
   .user-avatar-small {
     width: 28px;
     height: 28px;
-  }
-
-  .ai-avatar svg {
-    width: 14px;
-    height: 14px;
   }
 
   .msg-bubble {

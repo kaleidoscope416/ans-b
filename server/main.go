@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"ans-b/server/internal/config"
 	"ans-b/server/internal/embedding"
 	"ans-b/server/internal/llm"
 	"ans-b/server/internal/router"
@@ -14,6 +15,10 @@ import (
 )
 
 func main() {
+	if err := config.LoadDotEnvFiles(".env", "../.env"); err != nil {
+		log.Fatalf("failed to load .env: %v", err)
+	}
+
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		databaseURL = "postgres://campus:campus123@localhost:5432/campus_qa?sslmode=disable"

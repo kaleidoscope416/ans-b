@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
+
+import { errorMessage } from './errors.js'
+
+describe('errorMessage', () => {
+  it('uses string errors returned by Wails', () => {
+    assert.equal(errorMessage('JWT_SECRET is required'), 'JWT_SECRET is required')
+  })
+
+  it('uses standard Error messages', () => {
+    assert.equal(errorMessage(new Error('invalid username or password')), 'invalid username or password')
+  })
+
+  it('falls back when the error shape is empty', () => {
+    assert.equal(errorMessage(null), '请求失败，请稍后重试')
+  })
+})

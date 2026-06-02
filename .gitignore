@@ -4,6 +4,7 @@ node_modules/
 # Frontend build output
 dist/
 
+homework/
 # Go build output
 server/server
 server/bin/

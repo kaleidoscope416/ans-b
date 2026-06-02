@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import {
   UserIcon,
   AssignmentUserIcon,
@@ -8,6 +8,8 @@ import {
   BrowseOffIcon,
   SecuredIcon,
 } from 'tdesign-icons-vue-next'
+import { LoginStudent, RegisterStudent } from '../../wailsjs/go/main/App'
+import { errorMessage } from '../utils/errors'
 
 const emit = defineEmits(['login-success'])
 
@@ -27,6 +29,8 @@ const registerForm = reactive({
 })
 const registerShowPwd = ref(false)
 const registerShowConfirm = ref(false)
+const authLoading = ref(false)
+const authError = ref('')
 
 const passwordStrength = computed(() => {
   const pwd = registerForm.password
@@ -57,23 +61,56 @@ const strengthWidth = computed(() => {
   return map[passwordStrength.value] || '0%'
 })
 
-// TODO: 登录验证 —— 当前为 Mock 逻辑，直接通过
-// TODO: 接入后端 API 进行真实登录鉴权
-// TODO: 添加表单校验（帐号格式、密码强度）
-// TODO: 添加记住密码、验证码等功能
-function handleLogin() {
-  // Mock: 模拟登录成功，直接跳转问答界面
-  const name = loginForm.account.trim() || '用户'
-  emit('login-success', name)
+function displayName(result, fallback) {
+  return result?.user?.nickname || result?.user?.username || fallback || '用户'
 }
 
-// TODO: 注册验证 —— 当前为 Mock 逻辑
-// TODO: 接入后端 API 进行真实注册
-// TODO: 添加表单校验、验证码、重复帐号检测
-function handleRegister() {
-  // Mock: 模拟注册成功后自动登录
-  const name = registerForm.name.trim() || registerForm.account.trim() || '用户'
-  emit('login-success', name)
+async function handleLogin() {
+  if (authLoading.value) return
+
+  authError.value = ''
+  if (!loginForm.account.trim() || !loginForm.password.trim()) {
+    authError.value = '请输入帐号和密码'
+    return
+  }
+
+  authLoading.value = true
+  try {
+    const result = await LoginStudent(loginForm.account, loginForm.password)
+    emit('login-success', displayName(result, loginForm.account.trim()))
+  } catch (error) {
+    authError.value = errorMessage(error)
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function handleRegister() {
+  if (authLoading.value) return
+
+  authError.value = ''
+  if (!registerForm.account.trim() || !registerForm.password.trim()) {
+    authError.value = '请输入帐号和密码'
+    return
+  }
+  if (registerForm.password.trim().length < 6) {
+    authError.value = '密码至少需要 6 位'
+    return
+  }
+  if (registerForm.password !== registerForm.confirmPassword) {
+    authError.value = '两次输入的密码不一致'
+    return
+  }
+
+  authLoading.value = true
+  try {
+    const result = await RegisterStudent(registerForm.account, registerForm.password, registerForm.name)
+    emit('login-success', displayName(result, registerForm.name.trim() || registerForm.account.trim()))
+  } catch (error) {
+    authError.value = errorMessage(error)
+  } finally {
+    authLoading.value = false
+  }
 }
 </script>
 
@@ -129,6 +166,7 @@ function handleRegister() {
             type="text"
             placeholder="帐号"
             class="custom-input"
+            :disabled="authLoading"
           />
         </div>
       </div>
@@ -141,6 +179,8 @@ function handleRegister() {
             :type="loginShowPwd ? 'text' : 'password'"
             placeholder="密码"
             class="custom-input"
+            :disabled="authLoading"
+            @keydown.enter.prevent="handleLogin"
           />
           <button class="eye-btn" @click="loginShowPwd = !loginShowPwd">
             <BrowseIcon v-if="loginShowPwd" class="eye-icon" />
@@ -149,7 +189,15 @@ function handleRegister() {
         </div>
       </div>
 
-      <button class="submit-btn" @click="handleLogin">登录</button>
+      <p v-if="authError" class="auth-error">{{ authError }}</p>
+
+      <button
+        class="submit-btn"
+        :disabled="authLoading"
+        @click="handleLogin"
+      >
+        {{ authLoading ? '登录中...' : '登录' }}
+      </button>
 
       <div class="form-footer">
         <a class="text-link">忘记密码？</a>
@@ -166,6 +214,7 @@ function handleRegister() {
             type="text"
             placeholder="名称"
             class="custom-input"
+            :disabled="authLoading"
           />
         </div>
       </div>
@@ -178,6 +227,7 @@ function handleRegister() {
             type="text"
             placeholder="帐号"
             class="custom-input"
+            :disabled="authLoading"
           />
         </div>
       </div>
@@ -190,6 +240,7 @@ function handleRegister() {
             :type="registerShowPwd ? 'text' : 'password'"
             placeholder="密码"
             class="custom-input"
+            :disabled="authLoading"
           />
           <button class="eye-btn" @click="registerShowPwd = !registerShowPwd">
             <BrowseIcon v-if="registerShowPwd" class="eye-icon" />
@@ -219,6 +270,8 @@ function handleRegister() {
             :type="registerShowConfirm ? 'text' : 'password'"
             placeholder="确认密码"
             class="custom-input"
+            :disabled="authLoading"
+            @keydown.enter.prevent="handleRegister"
           />
           <button class="eye-btn" @click="registerShowConfirm = !registerShowConfirm">
             <BrowseIcon v-if="registerShowConfirm" class="eye-icon" />
@@ -227,7 +280,15 @@ function handleRegister() {
         </div>
       </div>
 
-      <button class="submit-btn" @click="handleRegister">注册</button>
+      <p v-if="authError" class="auth-error">{{ authError }}</p>
+
+      <button
+        class="submit-btn"
+        :disabled="authLoading"
+        @click="handleRegister"
+      >
+        {{ authLoading ? '注册中...' : '注册' }}
+      </button>
     </div>
     </Transition>
 
@@ -395,6 +456,11 @@ function handleRegister() {
   color: #9CA3AF;
 }
 
+.custom-input:disabled {
+  cursor: not-allowed;
+  color: #6B7280;
+}
+
 .eye-btn {
   background: none;
   border: none;
@@ -445,6 +511,16 @@ function handleRegister() {
   transition: color 200ms ease-out;
 }
 
+.auth-error {
+  margin: -2px 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #FEF2F2;
+  color: #DC2626;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .submit-btn {
   width: 100%;
   height: 44px;
@@ -464,6 +540,14 @@ function handleRegister() {
   background: linear-gradient(135deg, #5B21B6 0%, #7C3AED 100%);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(91, 33, 182, 0.2);
+}
+
+.submit-btn:disabled,
+.submit-btn:disabled:hover {
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  background: #CBD5E1;
 }
 
 .submit-btn:active {
