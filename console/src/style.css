@@ -150,6 +150,11 @@ body {
   cursor: pointer;
 }
 
+.submission-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .submission-item.active {
   border-color: #155bd4;
   background: #f5f8ff;
@@ -164,11 +169,51 @@ body {
   white-space: nowrap;
 }
 
-.submission-item span {
-  display: block;
+.submission-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 6px;
   color: #667085;
   font-size: 12px;
+  line-height: 1.5;
+}
+
+.review-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.review-meta div {
+  min-width: 0;
+}
+
+.review-meta-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.review-meta > div > strong {
+  display: block;
+  overflow: hidden;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-note-meta {
+  grid-column: 1 / -1;
 }
 
 .review-actions {
@@ -177,12 +222,17 @@ body {
   justify-content: flex-end;
 }
 
+.loading-state,
 .empty-state {
   padding: 20px;
   border: 1px dashed #d0d5dd;
   border-radius: 8px;
   color: #667085;
   text-align: center;
+}
+
+.loading-state {
+  background: #f9fafb;
 }
 
 .feedback {
@@ -382,6 +432,10 @@ body {
   .login-row,
   .review-layout,
   .submission-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .review-meta {
     grid-template-columns: 1fr;
   }
 
