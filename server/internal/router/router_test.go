@@ -30,8 +30,8 @@ func TestRegisterRoutesHandlesCORSPreflight(t *testing.T) {
 	RegisterRoutes(engine)
 
 	for _, origin := range []string{
-		"http://127.0.0.1:5173",
-		"http://100.115.97.57:5173",
+		"http://127.0.0.1:23457",
+		"http://100.115.97.57:23457",
 	} {
 		t.Run(origin, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
@@ -54,7 +54,7 @@ func TestRegisterRoutesHandlesCORSPreflight(t *testing.T) {
 	}
 }
 
-func TestRegisterRoutesAddsTodoEndpoints(t *testing.T) {
+func TestRegisterRoutesAddsExpectedEndpoints(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 
@@ -74,8 +74,8 @@ func TestRegisterRoutesAddsTodoEndpoints(t *testing.T) {
 		{http.MethodPost, "/api/v1/knowledge", http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/qa/ask", http.StatusUnauthorized},
 		{http.MethodGet, "/api/v1/search/candidates", http.StatusNotImplemented},
-		{http.MethodPost, "/api/v1/submissions", http.StatusNotImplemented},
-		{http.MethodGet, "/api/v1/submissions", http.StatusNotImplemented},
+		{http.MethodPost, "/api/v1/submissions", http.StatusUnauthorized},
+		{http.MethodGet, "/api/v1/submissions", http.StatusUnauthorized},
 		{http.MethodGet, "/api/v1/analytics/hot-questions", http.StatusNotImplemented},
 		{http.MethodPost, "/api/v1/model/embeddings", http.StatusNotImplemented},
 		{http.MethodPost, "/api/v1/storage/imports", http.StatusNotImplemented},

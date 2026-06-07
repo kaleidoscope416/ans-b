@@ -1,6 +1,6 @@
 HOST ?= 0.0.0.0
-API_BASE_URL ?= http://127.0.0.1:8080
-LAN_API_BASE_URL ?= http://100.115.97.57:8080
+API_BASE_URL ?= http://127.0.0.1:23456
+LAN_API_BASE_URL ?= http://100.115.97.57:23456
 SERVER_BIN ?= server/bin/campus-server
 GO_CACHE ?= $(CURDIR)/.cache/go-build
 

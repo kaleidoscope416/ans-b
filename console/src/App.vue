@@ -1,7 +1,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 
-const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:23456'
 
 const knowledgeForm = reactive({
   question: '',
@@ -16,12 +16,39 @@ const askForm = reactive({
   question: '',
 })
 
+const adminForm = reactive({
+  username: '',
+  password: '',
+})
+
+const reviewForm = reactive({
+  question: '',
+  answer: '',
+  category: '',
+  tags: '',
+  source: '',
+  remark: '',
+  reviewerNote: '',
+})
+
 const submitLoading = ref(false)
 const askLoading = ref(false)
+const adminLoading = ref(false)
+const submissionsLoading = ref(false)
+const reviewLoading = ref(false)
 const submitMessage = ref('')
 const submitError = ref('')
 const askError = ref('')
 const askResult = ref(null)
+const adminMessage = ref('')
+const adminError = ref('')
+const reviewMessage = ref('')
+const reviewError = ref('')
+const adminToken = ref(window.localStorage.getItem('ans-b-admin-token') || '')
+const adminUser = ref(JSON.parse(window.localStorage.getItem('ans-b-admin-user') || 'null'))
+const reviewStatus = ref('pending')
+const submissions = ref([])
+const selectedSubmission = ref(null)
 
 const canSubmitKnowledge = computed(() => (
   knowledgeForm.question.trim() &&
@@ -30,6 +57,19 @@ const canSubmitKnowledge = computed(() => (
 ))
 
 const canAsk = computed(() => askForm.question.trim() && !askLoading.value)
+const isAdminLoggedIn = computed(() => Boolean(adminToken.value))
+const canLoginAdmin = computed(() => (
+  adminForm.username.trim() &&
+  adminForm.password.trim() &&
+  !adminLoading.value
+))
+const canApproveSubmission = computed(() => (
+  selectedSubmission.value &&
+  reviewForm.question.trim() &&
+  reviewForm.answer.trim() &&
+  !reviewLoading.value
+))
+const canRejectSubmission = computed(() => selectedSubmission.value && !reviewLoading.value)
 
 function parseTags(value) {
   return value
@@ -38,19 +78,157 @@ function parseTags(value) {
     .filter(Boolean)
 }
 
-async function postJSON(path, payload) {
+async function requestJSON(path, options = {}) {
+  const {
+    method = 'GET',
+    payload,
+    auth = false,
+  } = options
+  const headers = {}
+  if (payload !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+  if (auth && adminToken.value) {
+    headers.Authorization = `Bearer ${adminToken.value}`
+  }
   const response = await fetch(`${apiBaseURL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    method,
+    headers,
+    body: payload === undefined ? undefined : JSON.stringify(payload),
   })
   const result = await response.json().catch(() => null)
   if (!response.ok || result?.code !== 0) {
     throw new Error(result?.message || `HTTP ${response.status}`)
   }
   return result.data
+}
+
+async function postJSON(path, payload) {
+  return requestJSON(path, { method: 'POST', payload })
+}
+
+async function loginAdmin() {
+  if (!canLoginAdmin.value) return
+
+  adminLoading.value = true
+  adminMessage.value = ''
+  adminError.value = ''
+
+  try {
+    const result = await requestJSON('/api/v1/auth/admin/login', {
+      method: 'POST',
+      payload: {
+        username: adminForm.username.trim(),
+        password: adminForm.password.trim(),
+      },
+    })
+    adminToken.value = result.token
+    adminUser.value = result.user
+    window.localStorage.setItem('ans-b-admin-token', result.token)
+    window.localStorage.setItem('ans-b-admin-user', JSON.stringify(result.user))
+    adminForm.password = ''
+    adminMessage.value = `已登录：${result.user?.username || adminForm.username.trim()}`
+    await loadSubmissions()
+  } catch (error) {
+    adminError.value = error.message
+  } finally {
+    adminLoading.value = false
+  }
+}
+
+function logoutAdmin() {
+  adminToken.value = ''
+  adminUser.value = null
+  submissions.value = []
+  selectedSubmission.value = null
+  window.localStorage.removeItem('ans-b-admin-token')
+  window.localStorage.removeItem('ans-b-admin-user')
+}
+
+function fillReviewForm(submission) {
+  selectedSubmission.value = submission
+  reviewForm.question = submission?.question || ''
+  reviewForm.answer = submission?.answer || ''
+  reviewForm.category = submission?.category || ''
+  reviewForm.tags = Array.isArray(submission?.tags) ? submission.tags.join('，') : ''
+  reviewForm.source = submission?.source || ''
+  reviewForm.remark = submission?.remark || ''
+  reviewForm.reviewerNote = submission?.reviewer_note || ''
+  reviewMessage.value = ''
+  reviewError.value = ''
+}
+
+async function loadSubmissions() {
+  if (!isAdminLoggedIn.value) return
+
+  submissionsLoading.value = true
+  reviewError.value = ''
+
+  try {
+    const query = reviewStatus.value ? `?status=${encodeURIComponent(reviewStatus.value)}` : ''
+    submissions.value = await requestJSON(`/api/v1/submissions${query}`, { auth: true })
+    if (!submissions.value.some((item) => item.id === selectedSubmission.value?.id)) {
+      fillReviewForm(submissions.value[0] || null)
+    }
+  } catch (error) {
+    reviewError.value = error.message
+  } finally {
+    submissionsLoading.value = false
+  }
+}
+
+async function approveSubmission() {
+  if (!canApproveSubmission.value) return
+
+  reviewLoading.value = true
+  reviewMessage.value = ''
+  reviewError.value = ''
+
+  try {
+    await requestJSON(`/api/v1/submissions/${selectedSubmission.value.id}/approve`, {
+      method: 'POST',
+      auth: true,
+      payload: {
+        question: reviewForm.question.trim(),
+        answer: reviewForm.answer.trim(),
+        category: reviewForm.category.trim(),
+        tags: parseTags(reviewForm.tags),
+        source: reviewForm.source.trim(),
+        remark: reviewForm.remark.trim(),
+        reviewer_note: reviewForm.reviewerNote.trim(),
+      },
+    })
+    reviewMessage.value = '审核通过，已生成向量并进入知识库'
+    await loadSubmissions()
+  } catch (error) {
+    reviewError.value = error.message
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
+async function rejectSubmission() {
+  if (!canRejectSubmission.value) return
+
+  reviewLoading.value = true
+  reviewMessage.value = ''
+  reviewError.value = ''
+
+  try {
+    await requestJSON(`/api/v1/submissions/${selectedSubmission.value.id}/reject`, {
+      method: 'POST',
+      auth: true,
+      payload: {
+        reviewer_note: reviewForm.reviewerNote.trim(),
+      },
+    })
+    reviewMessage.value = '已驳回投稿'
+    await loadSubmissions()
+  } catch (error) {
+    reviewError.value = error.message
+  } finally {
+    reviewLoading.value = false
+  }
 }
 
 async function submitKnowledge() {
@@ -114,10 +292,184 @@ function candidateBody(item) {
     <header class="console-header">
       <div>
         <h1>校园生活百事通 Console</h1>
-        <p>录入知识后可直接在右侧问答中检索验证。</p>
+        <p>审核用户投稿，通过后进入知识库并生成向量。</p>
       </div>
       <t-tag theme="primary" variant="light">API {{ apiBaseURL }}</t-tag>
     </header>
+
+    <section class="panel review-panel">
+      <div class="panel-title">
+        <h2>投稿审核</h2>
+        <span>{{ isAdminLoggedIn ? `管理员 ${adminUser?.username || ''}` : '请先登录管理员账号' }}</span>
+      </div>
+
+      <div v-if="!isAdminLoggedIn" class="login-row">
+        <t-input
+          v-model="adminForm.username"
+          placeholder="管理员账号"
+          :disabled="adminLoading"
+        />
+        <t-input
+          v-model="adminForm.password"
+          type="password"
+          placeholder="管理员密码"
+          :disabled="adminLoading"
+          @keydown.enter.prevent="loginAdmin"
+        />
+        <t-button
+          theme="primary"
+          :loading="adminLoading"
+          :disabled="!canLoginAdmin"
+          @click="loginAdmin"
+        >
+          登录
+        </t-button>
+      </div>
+
+      <div v-else class="review-layout">
+        <aside class="submission-list">
+          <div class="submission-toolbar">
+            <select v-model="reviewStatus" class="status-select" @change="loadSubmissions">
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+              <option value="rejected">已驳回</option>
+              <option value="">全部</option>
+            </select>
+            <t-button
+              variant="outline"
+              :loading="submissionsLoading"
+              @click="loadSubmissions"
+            >
+              刷新
+            </t-button>
+            <t-button variant="text" @click="logoutAdmin">退出</t-button>
+          </div>
+
+          <div v-if="!submissions.length && !submissionsLoading" class="empty-state">
+            暂无投稿
+          </div>
+
+          <button
+            v-for="submission in submissions"
+            :key="submission.id"
+            class="submission-item"
+            :class="{ active: selectedSubmission?.id === submission.id }"
+            type="button"
+            @click="fillReviewForm(submission)"
+          >
+            <strong>{{ submission.question }}</strong>
+            <span>{{ submission.status }} · #{{ submission.id }}</span>
+          </button>
+        </aside>
+
+        <section class="review-detail">
+          <div v-if="selectedSubmission" class="review-form">
+            <t-form label-align="top" @submit.prevent>
+              <t-form-item label="问题">
+                <t-textarea
+                  v-model="reviewForm.question"
+                  :autosize="{ minRows: 2, maxRows: 4 }"
+                  :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                />
+              </t-form-item>
+              <t-form-item label="答案">
+                <t-textarea
+                  v-model="reviewForm.answer"
+                  :autosize="{ minRows: 4, maxRows: 7 }"
+                  :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                />
+              </t-form-item>
+
+              <div class="form-row">
+                <t-form-item label="分类">
+                  <t-input
+                    v-model="reviewForm.category"
+                    :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                  />
+                </t-form-item>
+                <t-form-item label="标签">
+                  <t-input
+                    v-model="reviewForm.tags"
+                    placeholder="食堂，营业时间"
+                    :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                  />
+                </t-form-item>
+              </div>
+
+              <div class="form-row">
+                <t-form-item label="来源">
+                  <t-input
+                    v-model="reviewForm.source"
+                    :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                  />
+                </t-form-item>
+                <t-form-item label="备注">
+                  <t-input
+                    v-model="reviewForm.remark"
+                    :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                  />
+                </t-form-item>
+              </div>
+
+              <t-form-item label="审核备注">
+                <t-input
+                  v-model="reviewForm.reviewerNote"
+                  placeholder="可填写通过或驳回原因"
+                  :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                />
+              </t-form-item>
+
+              <div class="review-actions">
+                <t-button
+                  theme="success"
+                  :loading="reviewLoading"
+                  :disabled="!canApproveSubmission || selectedSubmission.status !== 'pending'"
+                  @click="approveSubmission"
+                >
+                  通过并入库
+                </t-button>
+                <t-button
+                  theme="danger"
+                  variant="outline"
+                  :loading="reviewLoading"
+                  :disabled="!canRejectSubmission || selectedSubmission.status !== 'pending'"
+                  @click="rejectSubmission"
+                >
+                  驳回
+                </t-button>
+              </div>
+            </t-form>
+          </div>
+
+          <div v-else class="empty-state">请选择一条投稿</div>
+
+          <t-alert
+            v-if="adminMessage"
+            class="feedback"
+            theme="success"
+            :message="adminMessage"
+          />
+          <t-alert
+            v-if="adminError"
+            class="feedback"
+            theme="error"
+            :message="adminError"
+          />
+          <t-alert
+            v-if="reviewMessage"
+            class="feedback"
+            theme="success"
+            :message="reviewMessage"
+          />
+          <t-alert
+            v-if="reviewError"
+            class="feedback"
+            theme="error"
+            :message="reviewError"
+          />
+        </section>
+      </div>
+    </section>
 
     <section class="console-grid">
       <section class="panel">

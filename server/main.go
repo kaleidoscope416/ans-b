@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"ans-b/server/internal/auth"
+	"ans-b/server/internal/config"
 	"ans-b/server/internal/embedding"
 	"ans-b/server/internal/llm"
 	"ans-b/server/internal/router"
@@ -17,6 +18,10 @@ import (
 )
 
 func main() {
+	if err := config.LoadDotEnvFiles(".env", "../.env"); err != nil {
+		log.Fatalf("failed to load .env: %v", err)
+	}
+
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		databaseURL = "postgres://campus:campus123@localhost:5432/campus_qa?sslmode=disable"
@@ -36,7 +41,7 @@ func main() {
 		embedBaseURL = "http://127.0.0.1:18080"
 	}
 	embedder := embedding.NewHTTPClient(embedBaseURL)
-	answerGenerator := llm.NewOpenAICompatibleFromEnv()
+	tokenManager := auth.NewTokenManagerFromEnv()
 
 	sessionStore, err := auth.NewRedisSessionStoreFromEnv()
 	if err != nil {
@@ -49,10 +54,16 @@ func main() {
 	}
 	defer sessionStore.Close()
 
+	authService := auth.NewService(auth.NewRepository(db), tokenManager, sessionStore)
+	if err := authService.InitAuthSystem(context.Background()); err != nil {
+		log.Fatalf("failed to initialize auth system: %v", err)
+	}
+	answerGenerator := llm.NewOpenAICompatibleFromEnv()
+
 	engine := gin.Default()
 	router.RegisterRoutesWithDBEmbedderAndSessionStore(engine, db, embedder, sessionStore, answerGenerator)
 
-	if err := engine.Run(); err != nil {
+	if err := engine.Run(":23456"); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"ans-b/server/internal/knowledge"
 	"ans-b/server/internal/model"
 	"ans-b/server/internal/qa"
+	"ans-b/server/internal/qaimport"
 	"ans-b/server/internal/search"
 	"ans-b/server/internal/storage"
 	"ans-b/server/internal/submission"
@@ -76,7 +77,14 @@ func RegisterRoutesWithDBEmbedderAndSessionStore(engine *gin.Engine, db *sql.DB,
 	qaService.SetAccessRecorder(analyticsService)
 	qa.NewHandler(qaService).RegisterRoutes(api.Group("/qa", auth.Middleware(tokenManager, sessionStore, auth.RoleStudent)))
 	search.NewHandler(search.NewService(search.NewRepository())).RegisterRoutes(api.Group("/search"))
-	submission.NewHandler(submission.NewService(submission.NewRepository())).RegisterRoutes(api.Group("/submissions"))
+	submissionHandler := submission.NewHandler(submission.NewService(
+		submission.NewRepository(db),
+		qaimport.NewPostgresRepository(db),
+		embedder,
+	))
+	submissionHandler.RegisterStudentRoutes(api.Group("/submissions", auth.Middleware(tokenManager, sessionStore, auth.RoleStudent)))
+	api.Group("/submissions", auth.Middleware(tokenManager, sessionStore, auth.RoleStudent, auth.RoleAdmin)).GET("", submissionHandler.List)
+	submissionHandler.RegisterAdminRoutes(api.Group("/submissions", auth.Middleware(tokenManager, sessionStore, auth.RoleAdmin)))
 	analytics.NewHandler(analyticsService).RegisterRoutes(api.Group("/analytics"))
 	model.NewHandler(model.NewService(model.NewRepository())).RegisterRoutes(api.Group("/model"))
 	storage.NewHandler(storage.NewService(storage.NewRepository())).RegisterRoutes(api.Group("/storage"))
