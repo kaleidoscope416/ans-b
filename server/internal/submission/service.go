@@ -19,7 +19,7 @@ const (
 
 type Service struct {
 	repository    submissionRepository
-	knowledgeRepo *qaimport.PostgresRepository
+	knowledgeRepo knowledgeTxRepository
 	embedder      qaimport.Embedder
 }
 
@@ -28,8 +28,12 @@ type submissionRepository interface {
 	FindByID(ctx context.Context, id int64) (*Submission, error)
 	ListByUserID(ctx context.Context, userID int64) ([]Submission, error)
 	ListByStatus(ctx context.Context, status string) ([]Submission, error)
-	MarkApproved(ctx context.Context, id int64, reviewerNote string, reviewedAt time.Time) error
+	ApproveWithKnowledge(ctx context.Context, id int64, reviewerNote string, reviewedAt time.Time, record qaimport.KnowledgeRecord, knowledgeRepo knowledgeTxRepository) error
 	MarkRejected(ctx context.Context, id int64, reviewerNote string, reviewedAt time.Time) error
+}
+
+type knowledgeTxRepository interface {
+	InsertKnowledgeTx(ctx context.Context, tx *sql.Tx, record qaimport.KnowledgeRecord) error
 }
 
 type CreateInput struct {
@@ -42,10 +46,16 @@ type CreateInput struct {
 }
 
 type ReviewInput struct {
+	Question     string
+	Answer       string
+	Category     string
+	Tags         []string
+	Source       string
+	Remark       string
 	ReviewerNote string
 }
 
-func NewService(repository submissionRepository, knowledgeRepo *qaimport.PostgresRepository, embedder qaimport.Embedder) *Service {
+func NewService(repository submissionRepository, knowledgeRepo knowledgeTxRepository, embedder qaimport.Embedder) *Service {
 	return &Service{
 		repository:    repository,
 		knowledgeRepo: knowledgeRepo,
@@ -130,15 +140,20 @@ func (s *Service) Approve(ctx context.Context, submissionID int64, input ReviewI
 		return errors.New("submission has already been reviewed")
 	}
 
-	record, err := s.buildKnowledgeRecord(*submission)
+	reviewedSubmission, err := reviewedKnowledgeSubmission(*submission, input)
 	if err != nil {
 		return err
 	}
-	if err := s.publishKnowledge(ctx, record); err != nil {
+	record, err := s.buildKnowledgeRecord(reviewedSubmission)
+	if err != nil {
+		return err
+	}
+	record, err = s.embedKnowledge(ctx, record)
+	if err != nil {
 		return err
 	}
 
-	return s.repository.MarkApproved(ctx, submissionID, strings.TrimSpace(input.ReviewerNote), time.Now())
+	return s.repository.ApproveWithKnowledge(ctx, submissionID, strings.TrimSpace(input.ReviewerNote), time.Now(), record, s.knowledgeRepo)
 }
 
 func (s *Service) Reject(ctx context.Context, submissionID int64, input ReviewInput) error {
@@ -177,29 +192,72 @@ func (s *Service) buildKnowledgeRecord(submission Submission) (qaimport.Knowledg
 	}
 	record.SourceType = "user_submit"
 	if len(record.Chunks) > 0 {
-		record.Chunks[0].SourceURL = strings.TrimSpace(submission.Source)
+		record.Chunks[0].SourceURL = sourceURL(submission.Source)
 	}
 	return record, nil
 }
 
-func (s *Service) publishKnowledge(ctx context.Context, record qaimport.KnowledgeRecord) error {
+func (s *Service) embedKnowledge(ctx context.Context, record qaimport.KnowledgeRecord) (qaimport.KnowledgeRecord, error) {
 	if s.embedder == nil {
-		return errors.New("embedder is not configured")
+		return qaimport.KnowledgeRecord{}, errors.New("embedder is not configured")
 	}
 	if len(record.Chunks) == 0 {
-		return errors.New("knowledge chunks are required")
+		return qaimport.KnowledgeRecord{}, errors.New("knowledge chunks are required")
 	}
 
 	embeddings, err := s.embedder.Embed(ctx, []string{record.Chunks[0].Text})
 	if err != nil {
-		return err
+		return qaimport.KnowledgeRecord{}, err
 	}
 	if len(embeddings) != 1 {
-		return errors.New("embedding count mismatch")
+		return qaimport.KnowledgeRecord{}, errors.New("embedding count mismatch")
 	}
 
 	record.Chunks[0].Embedding = embedding.VectorLiteral(embeddings[0])
-	return s.knowledgeRepo.InsertKnowledge(ctx, record)
+	return record, nil
+}
+
+func reviewedKnowledgeSubmission(submission Submission, input ReviewInput) (Submission, error) {
+	reviewed := submission
+	if reviewInputHasKnowledge(input) {
+		if question := strings.TrimSpace(input.Question); question != "" {
+			reviewed.Question = question
+		}
+		if answer := strings.TrimSpace(input.Answer); answer != "" {
+			reviewed.Answer = answer
+		}
+		reviewed.Category = strings.TrimSpace(input.Category)
+		reviewed.Tags = cleanTags(input.Tags)
+		reviewed.Source = strings.TrimSpace(input.Source)
+		reviewed.Remark = strings.TrimSpace(input.Remark)
+	}
+	if strings.TrimSpace(reviewed.Question) == "" {
+		return Submission{}, errors.New("question is required")
+	}
+	if strings.TrimSpace(reviewed.Answer) == "" {
+		return Submission{}, errors.New("answer is required")
+	}
+	if len(strings.TrimSpace(reviewed.Category)) > 100 {
+		return Submission{}, errors.New("category is too long")
+	}
+	return reviewed, nil
+}
+
+func reviewInputHasKnowledge(input ReviewInput) bool {
+	return strings.TrimSpace(input.Question) != "" ||
+		strings.TrimSpace(input.Answer) != "" ||
+		strings.TrimSpace(input.Category) != "" ||
+		len(input.Tags) > 0 ||
+		strings.TrimSpace(input.Source) != "" ||
+		strings.TrimSpace(input.Remark) != ""
+}
+
+func sourceURL(source string) string {
+	source = strings.TrimSpace(source)
+	if strings.HasPrefix(source, "https://") || strings.HasPrefix(source, "http://") {
+		return source
+	}
+	return ""
 }
 
 func normalizeStatus(status string) string {

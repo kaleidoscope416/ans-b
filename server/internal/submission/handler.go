@@ -145,7 +145,13 @@ func (h *Handler) Approve(c *gin.Context) {
 	}
 
 	var request struct {
-		ReviewerNote string `json:"reviewer_note"`
+		Question     string   `json:"question"`
+		Answer       string   `json:"answer"`
+		Category     string   `json:"category"`
+		Tags         []string `json:"tags"`
+		Source       string   `json:"source"`
+		Remark       string   `json:"remark"`
+		ReviewerNote string   `json:"reviewer_note"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -157,6 +163,12 @@ func (h *Handler) Approve(c *gin.Context) {
 	}
 
 	err = h.service.Approve(c.Request.Context(), submissionID, ReviewInput{
+		Question:     request.Question,
+		Answer:       request.Answer,
+		Category:     request.Category,
+		Tags:         request.Tags,
+		Source:       request.Source,
+		Remark:       request.Remark,
 		ReviewerNote: request.ReviewerNote,
 	})
 	if err != nil {

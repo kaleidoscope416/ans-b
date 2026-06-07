@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"ans-b/server/internal/qaimport"
 )
 
 type Submission struct {
@@ -205,8 +207,74 @@ func (r *Repository) MarkApproved(ctx context.Context, id int64, reviewerNote st
 	return r.updateReviewStatus(ctx, id, "approved", reviewerNote, reviewedAt)
 }
 
+func (r *Repository) ApproveWithKnowledge(ctx context.Context, id int64, reviewerNote string, reviewedAt time.Time, record qaimport.KnowledgeRecord, knowledgeRepo knowledgeTxRepository) error {
+	if r == nil || r.db == nil {
+		return errors.New("submission repository is not configured")
+	}
+	if knowledgeRepo == nil {
+		return errors.New("knowledge repository is not configured")
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	submission, err := findSubmissionByIDForUpdate(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	if submission.Status != StatusPending {
+		return errors.New("submission has already been reviewed")
+	}
+
+	if err := knowledgeRepo.InsertKnowledgeTx(ctx, tx, record); err != nil {
+		return err
+	}
+	if err := updateReviewStatusTx(ctx, tx, id, StatusApproved, reviewerNote, reviewedAt); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
 func (r *Repository) MarkRejected(ctx context.Context, id int64, reviewerNote string, reviewedAt time.Time) error {
-	return r.updateReviewStatus(ctx, id, "rejected", reviewerNote, reviewedAt)
+	if r == nil || r.db == nil {
+		return errors.New("submission repository is not configured")
+	}
+
+	result, err := r.db.ExecContext(ctx, markRejectedQuery(), StatusRejected, reviewerNote, reviewedAt, id, StatusPending)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return errors.New("submission has already been reviewed")
+	}
+	return nil
+}
+
+func markRejectedQuery() string {
+	return `
+		UPDATE user_submissions
+		SET status = $1,
+		    reviewer_note = NULLIF($2, ''),
+		    reviewed_at = $3
+		WHERE id = $4
+		  AND status = $5
+	`
 }
 
 func (r *Repository) updateReviewStatus(ctx context.Context, id int64, status, reviewerNote string, reviewedAt time.Time) error {
@@ -215,6 +283,68 @@ func (r *Repository) updateReviewStatus(ctx context.Context, id int64, status, r
 	}
 
 	result, err := r.db.ExecContext(ctx, `
+		UPDATE user_submissions
+		SET status = $1,
+		    reviewer_note = NULLIF($2, ''),
+		    reviewed_at = $3
+		WHERE id = $4
+	`, status, reviewerNote, reviewedAt, id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func findSubmissionByIDForUpdate(ctx context.Context, tx *sql.Tx, id int64) (*Submission, error) {
+	var found Submission
+	var reviewedAt sql.NullTime
+	err := tx.QueryRowContext(ctx, `
+		SELECT
+			id,
+			user_id,
+			question,
+			answer,
+			COALESCE(category, ''),
+			COALESCE(tags, ARRAY[]::text[]),
+			COALESCE(source, ''),
+			COALESCE(remark, ''),
+			status,
+			COALESCE(reviewer_note, ''),
+			created_at,
+			reviewed_at
+		FROM user_submissions
+		WHERE id = $1
+		FOR UPDATE
+	`, id).Scan(
+		&found.ID,
+		&found.UserID,
+		&found.Question,
+		&found.Answer,
+		&found.Category,
+		(*pqStringArray)(&found.Tags),
+		&found.Source,
+		&found.Remark,
+		&found.Status,
+		&found.ReviewerNote,
+		&found.CreatedAt,
+		&reviewedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	found.ReviewedAt = nullTimePtr(reviewedAt)
+	return &found, nil
+}
+
+func updateReviewStatusTx(ctx context.Context, tx *sql.Tx, id int64, status, reviewerNote string, reviewedAt time.Time) error {
+	result, err := tx.ExecContext(ctx, `
 		UPDATE user_submissions
 		SET status = $1,
 		    reviewer_note = NULLIF($2, ''),
