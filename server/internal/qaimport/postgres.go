@@ -26,6 +26,11 @@ func (r *PostgresRepository) InsertKnowledge(ctx context.Context, record Knowled
 	return err
 }
 
+func (r *PostgresRepository) InsertKnowledgeTx(ctx context.Context, tx *sql.Tx, record KnowledgeRecord) error {
+	_, err := r.UpsertKnowledgeBatchTx(ctx, tx, []KnowledgeRecord{record}, BatchOptions{})
+	return err
+}
+
 func (r *PostgresRepository) UpsertKnowledgeBatch(ctx context.Context, records []KnowledgeRecord, options BatchOptions) (int, error) {
 	if len(records) == 0 {
 		return 0, nil
@@ -70,6 +75,40 @@ func (r *PostgresRepository) UpsertKnowledgeBatch(ctx context.Context, records [
 		return 0, err
 	}
 	committed = true
+	return len(records), nil
+}
+
+func (r *PostgresRepository) UpsertKnowledgeBatchTx(ctx context.Context, tx *sql.Tx, records []KnowledgeRecord, options BatchOptions) (int, error) {
+	if tx == nil {
+		return 0, fmt.Errorf("transaction is required")
+	}
+	if len(records) == 0 {
+		return 0, nil
+	}
+	options = normalizeBatchOptions(options)
+
+	itemIDs := make([]int64, 0, len(records))
+	chunkRows := make([]chunkInsertRow, 0)
+	for _, record := range records {
+		itemID, err := upsertKnowledgeItem(ctx, tx, record)
+		if err != nil {
+			return 0, err
+		}
+		itemIDs = append(itemIDs, itemID)
+		for _, chunk := range record.Chunks {
+			chunkRows = append(chunkRows, chunkInsertRow{
+				itemID: itemID,
+				chunk:  chunk,
+			})
+		}
+	}
+
+	if err := deleteChunksForItems(ctx, tx, itemIDs); err != nil {
+		return 0, err
+	}
+	if err := insertChunkRows(ctx, tx, chunkRows, options.ChunkBatchSize); err != nil {
+		return 0, err
+	}
 	return len(records), nil
 }
 

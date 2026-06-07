@@ -70,6 +70,11 @@ body {
   border-radius: 8px;
 }
 
+.review-panel {
+  max-width: 1180px;
+  margin: 0 auto 20px;
+}
+
 .panel-title {
   display: flex;
   align-items: baseline;
@@ -95,6 +100,89 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
+}
+
+.login-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.review-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.submission-list,
+.review-detail {
+  min-width: 0;
+}
+
+.submission-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.status-select {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #344054;
+}
+
+.submission-item {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.submission-item.active {
+  border-color: #155bd4;
+  background: #f5f8ff;
+}
+
+.submission-item strong {
+  display: block;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.submission-item span {
+  display: block;
+  margin-top: 6px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.review-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.empty-state {
+  padding: 20px;
+  border: 1px dashed #d0d5dd;
+  border-radius: 8px;
+  color: #667085;
+  text-align: center;
 }
 
 .feedback {
@@ -288,6 +376,12 @@ body {
   }
 
   .console-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .login-row,
+  .review-layout,
+  .submission-toolbar {
     grid-template-columns: 1fr;
   }
 
