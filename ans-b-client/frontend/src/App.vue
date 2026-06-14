@@ -1,21 +1,22 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import LoginRegister from './components/LoginRegister.vue'
-import Chat from './components/Chat.vue'
+import StudentShell from './components/StudentShell.vue'
 
 const currentView = ref('login')
-const userName = ref('用户')
+const currentUser = ref(null)
 
-const bgClass = computed(() =>
-  currentView.value === 'login' ? 'bg-login' : 'bg-chat'
-)
+const bgClass = computed(() => (
+  currentView.value === 'login' ? 'bg-login' : 'bg-shell'
+))
 
-function onLoginSuccess(name) {
-  userName.value = name || '用户'
-  currentView.value = 'chat'
+function onLoginSuccess(user) {
+  currentUser.value = user || null
+  currentView.value = 'shell'
 }
 
 function onLogout() {
+  currentUser.value = null
   currentView.value = 'login'
 }
 </script>
@@ -27,10 +28,9 @@ function onLogout() {
       v-if="currentView === 'login'"
       @login-success="onLoginSuccess"
     />
-    <Chat
+    <StudentShell
       v-else
-      class="fade-in"
-      :user-name="userName"
+      :initial-user="currentUser"
       @logout="onLogout"
     />
   </div>
@@ -47,41 +47,24 @@ function onLogout() {
 .app-root.bg-login {
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 80% 20%, #EEF2FF 0%, #F8FAFC 50%, #FFFFFF 100%);
+  background:
+    radial-gradient(circle at top right, rgba(249, 115, 22, 0.10), transparent 28%),
+    linear-gradient(135deg, #fef7ed 0%, #fff7ed 20%, #eff6ff 72%, #ffffff 100%);
 }
 
-.app-root.bg-chat {
-  align-items: stretch;
-  justify-content: stretch;
-  background: #F8FAFC;
+.app-root.bg-shell {
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.08), transparent 24%),
+    linear-gradient(180deg, #fffdf8 0%, #f7fbff 48%, #f4f7fb 100%);
 }
 
 .login-bg-glow {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 800px;
-  height: 800px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(
-    circle at 50% 50%,
-    rgba(148, 163, 184, 0.08) 0%,
-    transparent 60%
-  );
+  inset: auto auto 10% 10%;
+  width: 720px;
+  height: 720px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.08) 0%, transparent 62%);
   pointer-events: none;
-  z-index: 0;
-}
-
-.fade-in {
-  animation: viewFadeIn 120ms ease-out;
-}
-
-@keyframes viewFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 </style>

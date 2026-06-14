@@ -6,8 +6,24 @@ export function AskQuestion(arg1, arg2) {
   return window['go']['main']['App']['AskQuestion'](arg1, arg2);
 }
 
+export function CreateSubmission(arg1) {
+  return window['go']['main']['App']['CreateSubmission'](arg1);
+}
+
+export function GetCurrentUser() {
+  return window['go']['main']['App']['GetCurrentUser']();
+}
+
+export function GetHotQuestionsStatus(arg1) {
+  return window['go']['main']['App']['GetHotQuestionsStatus'](arg1);
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function ListMySubmissions() {
+  return window['go']['main']['App']['ListMySubmissions']();
 }
 
 export function LoginStudent(arg1, arg2) {
