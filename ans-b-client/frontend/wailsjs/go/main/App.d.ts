@@ -4,7 +4,15 @@ import {main} from '../models';
 
 export function AskQuestion(arg1:string,arg2:number):Promise<Record<string, any>>;
 
+export function CreateSubmission(arg1:main.SubmissionInput):Promise<main.Submission>;
+
+export function GetCurrentUser():Promise<main.UserProfile>;
+
+export function GetHotQuestionsStatus(arg1:number):Promise<main.HotQuestionsStatus>;
+
 export function Greet(arg1:string):Promise<string>;
+
+export function ListMySubmissions():Promise<Array<main.Submission>>;
 
 export function LoginStudent(arg1:string,arg2:string):Promise<main.LoginResult>;
 

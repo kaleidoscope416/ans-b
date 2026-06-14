@@ -61,10 +61,6 @@ const strengthWidth = computed(() => {
   return map[passwordStrength.value] || '0%'
 })
 
-function displayName(result, fallback) {
-  return result?.user?.nickname || result?.user?.username || fallback || '用户'
-}
-
 async function handleLogin() {
   if (authLoading.value) return
 
@@ -77,7 +73,10 @@ async function handleLogin() {
   authLoading.value = true
   try {
     const result = await LoginStudent(loginForm.account, loginForm.password)
-    emit('login-success', displayName(result, loginForm.account.trim()))
+    emit('login-success', result?.user || {
+      username: loginForm.account.trim(),
+      nickname: '',
+    })
   } catch (error) {
     authError.value = errorMessage(error)
   } finally {
@@ -105,7 +104,10 @@ async function handleRegister() {
   authLoading.value = true
   try {
     const result = await RegisterStudent(registerForm.account, registerForm.password, registerForm.name)
-    emit('login-success', displayName(result, registerForm.name.trim() || registerForm.account.trim()))
+    emit('login-success', result?.user || {
+      username: registerForm.account.trim(),
+      nickname: registerForm.name.trim(),
+    })
   } catch (error) {
     authError.value = errorMessage(error)
   } finally {
