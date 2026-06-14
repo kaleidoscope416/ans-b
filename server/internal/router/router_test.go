@@ -67,6 +67,7 @@ func TestRegisterRoutesAddsExpectedEndpoints(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/v1/auth/student/login", http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/auth/admin/login", http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/auth/logout", http.StatusUnauthorized},
 		{http.MethodPost, "/api/v1/users/register", http.StatusBadRequest},
 		{http.MethodGet, "/api/v1/users/me", http.StatusUnauthorized},
 		{http.MethodGet, "/api/v1/knowledge", http.StatusNotImplemented},

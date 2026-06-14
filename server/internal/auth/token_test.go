@@ -8,7 +8,7 @@ import (
 func TestTokenManagerSignsAndVerifiesToken(t *testing.T) {
 	manager := NewTokenManager("test-secret", time.Hour)
 
-	token, expiresIn, err := manager.Sign(12, "student1", RoleStudent)
+	token, expiresIn, err := manager.Sign(12, "student1", RoleStudent, "session-1")
 	if err != nil {
 		t.Fatalf("sign token: %v", err)
 	}
@@ -23,20 +23,28 @@ func TestTokenManagerSignsAndVerifiesToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verify token: %v", err)
 	}
-	if claims.UserID != 12 || claims.Username != "student1" || claims.Role != RoleStudent {
+	if claims.UserID != 12 || claims.Username != "student1" || claims.Role != RoleStudent || claims.SessionID != "session-1" {
 		t.Fatalf("unexpected claims: %#v", claims)
 	}
 }
 
 func TestTokenManagerRejectsTamperedToken(t *testing.T) {
 	manager := NewTokenManager("test-secret", time.Hour)
-	token, _, err := manager.Sign(12, "student1", RoleStudent)
+	token, _, err := manager.Sign(12, "student1", RoleStudent, "session-1")
 	if err != nil {
 		t.Fatalf("sign token: %v", err)
 	}
 
 	if _, err := manager.Verify(token + "x"); err == nil {
 		t.Fatal("expected tampered token to fail")
+	}
+}
+
+func TestTokenManagerRequiresSessionID(t *testing.T) {
+	manager := NewTokenManager("test-secret", time.Hour)
+
+	if _, _, err := manager.Sign(12, "student1", RoleStudent, ""); err == nil {
+		t.Fatal("expected missing session id to fail")
 	}
 }
 

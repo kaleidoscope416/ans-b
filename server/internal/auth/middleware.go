@@ -1,14 +1,16 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 const claimsContextKey = "auth.claims"
 
-func Middleware(tokens *TokenManager, roles ...string) gin.HandlerFunc {
+func Middleware(tokens *TokenManager, sessions SessionStore, roles ...string) gin.HandlerFunc {
 	allowed := make(map[string]struct{}, len(roles))
 	for _, role := range roles {
 		allowed[role] = struct{}{}
@@ -23,6 +25,26 @@ func Middleware(tokens *TokenManager, roles ...string) gin.HandlerFunc {
 		claims, err := tokens.Verify(token)
 		if err != nil {
 			unauthorized(c, err.Error())
+			return
+		}
+		if sessions == nil {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"code": 50000, "message": "session store unavailable", "data": nil})
+			return
+		}
+		session, err := sessions.Get(c.Request.Context(), claims.SessionID)
+		if err != nil {
+			if errors.Is(err, ErrSessionNotFound) {
+				unauthorized(c, "login session expired")
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"code": 50000, "message": "session store unavailable", "data": nil})
+			return
+		}
+		if !time.Now().Before(session.ExpiresAt) ||
+			session.UserID != claims.UserID ||
+			session.Username != claims.Username ||
+			session.Role != claims.Role {
+			unauthorized(c, "invalid login session")
 			return
 		}
 		if len(allowed) > 0 {

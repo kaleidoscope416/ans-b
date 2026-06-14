@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"time"
 
 	"ans-b/server/internal/auth"
 	"ans-b/server/internal/config"
@@ -41,14 +42,26 @@ func main() {
 	}
 	embedder := embedding.NewHTTPClient(embedBaseURL)
 	tokenManager := auth.NewTokenManagerFromEnv()
-	authService := auth.NewService(auth.NewRepository(db), tokenManager)
+
+	sessionStore, err := auth.NewRedisSessionStoreFromEnv()
+	if err != nil {
+		log.Fatalf("failed to configure redis session store: %v", err)
+	}
+	redisCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := sessionStore.Ping(redisCtx); err != nil {
+		log.Fatalf("failed to connect redis: %v", err)
+	}
+	defer sessionStore.Close()
+
+	authService := auth.NewService(auth.NewRepository(db), tokenManager, sessionStore)
 	if err := authService.InitAuthSystem(context.Background()); err != nil {
 		log.Fatalf("failed to initialize auth system: %v", err)
 	}
 	answerGenerator := llm.NewOpenAICompatibleFromEnv()
 
 	engine := gin.Default()
-	router.RegisterRoutesWithDBAndEmbedder(engine, db, embedder, answerGenerator)
+	router.RegisterRoutesWithDBEmbedderAndSessionStore(engine, db, embedder, sessionStore, answerGenerator)
 
 	if err := engine.Run(":23456"); err != nil {
 		log.Fatalf("failed to start server: %v", err)

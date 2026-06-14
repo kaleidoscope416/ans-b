@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:23456'
 
@@ -35,7 +35,8 @@ const submitLoading = ref(false)
 const askLoading = ref(false)
 const adminLoading = ref(false)
 const submissionsLoading = ref(false)
-const reviewLoading = ref(false)
+const approveLoading = ref(false)
+const rejectLoading = ref(false)
 const submitMessage = ref('')
 const submitError = ref('')
 const askError = ref('')
@@ -50,6 +51,19 @@ const reviewStatus = ref('pending')
 const submissions = ref([])
 const selectedSubmission = ref(null)
 
+const statusOptions = [
+  { value: 'pending', label: '待审核', emptyText: '暂无待审核投稿' },
+  { value: 'approved', label: '已通过', emptyText: '暂无已通过投稿' },
+  { value: 'rejected', label: '已驳回', emptyText: '暂无已驳回投稿' },
+  { value: '', label: '全部', emptyText: '暂无投稿' },
+]
+
+const statusThemeMap = {
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'danger',
+}
+
 const canSubmitKnowledge = computed(() => (
   knowledgeForm.question.trim() &&
   knowledgeForm.answer.trim() &&
@@ -63,19 +77,53 @@ const canLoginAdmin = computed(() => (
   adminForm.password.trim() &&
   !adminLoading.value
 ))
+const isReviewBusy = computed(() => approveLoading.value || rejectLoading.value)
+const isSelectedPending = computed(() => selectedSubmission.value?.status === 'pending')
+const canEditReviewForm = computed(() => isSelectedPending.value && !isReviewBusy.value)
 const canApproveSubmission = computed(() => (
   selectedSubmission.value &&
+  isSelectedPending.value &&
   reviewForm.question.trim() &&
   reviewForm.answer.trim() &&
-  !reviewLoading.value
+  !isReviewBusy.value
 ))
-const canRejectSubmission = computed(() => selectedSubmission.value && !reviewLoading.value)
+const canRejectSubmission = computed(() => (
+  selectedSubmission.value &&
+  isSelectedPending.value &&
+  !isReviewBusy.value
+))
+const emptySubmissionText = computed(() => (
+  statusOptions.find((item) => item.value === reviewStatus.value)?.emptyText || '暂无投稿'
+))
 
 function parseTags(value) {
   return value
     .split(/[,，\n]/)
     .map((tag) => tag.trim())
     .filter(Boolean)
+}
+
+function statusLabel(status) {
+  return statusOptions.find((item) => item.value === status)?.label || status || '未知'
+}
+
+function statusTheme(status) {
+  return statusThemeMap[status] || 'default'
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 async function requestJSON(path, options = {}) {
@@ -145,7 +193,9 @@ function logoutAdmin() {
   window.localStorage.removeItem('ans-b-admin-user')
 }
 
-function fillReviewForm(submission) {
+function fillReviewForm(submission, options = {}) {
+  const { clearFeedback = true, allowBusy = false } = options
+  if (isReviewBusy.value && !allowBusy) return
   selectedSubmission.value = submission
   reviewForm.question = submission?.question || ''
   reviewForm.answer = submission?.answer || ''
@@ -154,23 +204,35 @@ function fillReviewForm(submission) {
   reviewForm.source = submission?.source || ''
   reviewForm.remark = submission?.remark || ''
   reviewForm.reviewerNote = submission?.reviewer_note || ''
-  reviewMessage.value = ''
-  reviewError.value = ''
+  if (clearFeedback) {
+    reviewMessage.value = ''
+    reviewError.value = ''
+  }
 }
 
-async function loadSubmissions() {
+async function loadSubmissions(options = {}) {
   if (!isAdminLoggedIn.value) return
+  if (isReviewBusy.value && !options.force) return
 
+  const { preserveFeedback = false } = options
   submissionsLoading.value = true
-  reviewError.value = ''
+  if (!preserveFeedback) {
+    reviewError.value = ''
+  }
 
   try {
     const query = reviewStatus.value ? `?status=${encodeURIComponent(reviewStatus.value)}` : ''
-    submissions.value = await requestJSON(`/api/v1/submissions${query}`, { auth: true })
-    if (!submissions.value.some((item) => item.id === selectedSubmission.value?.id)) {
-      fillReviewForm(submissions.value[0] || null)
-    }
+    const result = await requestJSON(`/api/v1/submissions${query}`, { auth: true })
+    submissions.value = result
+    const selected = result.find((item) => item.id === selectedSubmission.value?.id)
+    fillReviewForm(selected || result[0] || null, {
+      allowBusy: options.force,
+      clearFeedback: !preserveFeedback,
+    })
   } catch (error) {
+    if (!preserveFeedback) {
+      reviewMessage.value = ''
+    }
     reviewError.value = error.message
   } finally {
     submissionsLoading.value = false
@@ -180,7 +242,7 @@ async function loadSubmissions() {
 async function approveSubmission() {
   if (!canApproveSubmission.value) return
 
-  reviewLoading.value = true
+  approveLoading.value = true
   reviewMessage.value = ''
   reviewError.value = ''
 
@@ -199,18 +261,18 @@ async function approveSubmission() {
       },
     })
     reviewMessage.value = '审核通过，已生成向量并进入知识库'
-    await loadSubmissions()
+    await loadSubmissions({ preserveFeedback: true, force: true })
   } catch (error) {
     reviewError.value = error.message
   } finally {
-    reviewLoading.value = false
+    approveLoading.value = false
   }
 }
 
 async function rejectSubmission() {
   if (!canRejectSubmission.value) return
 
-  reviewLoading.value = true
+  rejectLoading.value = true
   reviewMessage.value = ''
   reviewError.value = ''
 
@@ -223,11 +285,11 @@ async function rejectSubmission() {
       },
     })
     reviewMessage.value = '已驳回投稿'
-    await loadSubmissions()
+    await loadSubmissions({ preserveFeedback: true, force: true })
   } catch (error) {
     reviewError.value = error.message
   } finally {
-    reviewLoading.value = false
+    rejectLoading.value = false
   }
 }
 
@@ -285,6 +347,12 @@ function candidateTitle(item) {
 function candidateBody(item) {
   return item?.chunk_text || item?.answer || ''
 }
+
+onMounted(() => {
+  if (isAdminLoggedIn.value) {
+    loadSubmissions()
+  }
+})
 </script>
 
 <template>
@@ -329,24 +397,37 @@ function candidateBody(item) {
       <div v-else class="review-layout">
         <aside class="submission-list">
           <div class="submission-toolbar">
-            <select v-model="reviewStatus" class="status-select" @change="loadSubmissions">
-              <option value="pending">待审核</option>
-              <option value="approved">已通过</option>
-              <option value="rejected">已驳回</option>
-              <option value="">全部</option>
+            <select
+              v-model="reviewStatus"
+              class="status-select"
+              :disabled="submissionsLoading || isReviewBusy"
+              @change="loadSubmissions"
+            >
+              <option
+                v-for="option in statusOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
             </select>
             <t-button
               variant="outline"
               :loading="submissionsLoading"
+              :disabled="submissionsLoading || isReviewBusy"
               @click="loadSubmissions"
             >
               刷新
             </t-button>
-            <t-button variant="text" @click="logoutAdmin">退出</t-button>
+            <t-button variant="text" :disabled="isReviewBusy" @click="logoutAdmin">退出</t-button>
           </div>
 
-          <div v-if="!submissions.length && !submissionsLoading" class="empty-state">
-            暂无投稿
+          <div v-if="submissionsLoading" class="loading-state">
+            正在加载投稿...
+          </div>
+
+          <div v-else-if="!submissions.length" class="empty-state">
+            {{ emptySubmissionText }}
           </div>
 
           <button
@@ -355,28 +436,63 @@ function candidateBody(item) {
             class="submission-item"
             :class="{ active: selectedSubmission?.id === submission.id }"
             type="button"
+            :disabled="isReviewBusy"
             @click="fillReviewForm(submission)"
           >
             <strong>{{ submission.question }}</strong>
-            <span>{{ submission.status }} · #{{ submission.id }}</span>
+            <span class="submission-summary">
+              <t-tag
+                size="small"
+                variant="light"
+                :theme="statusTheme(submission.status)"
+              >
+                {{ statusLabel(submission.status) }}
+              </t-tag>
+              #{{ submission.id }} · {{ formatDateTime(submission.created_at) }}
+            </span>
           </button>
         </aside>
 
         <section class="review-detail">
           <div v-if="selectedSubmission" class="review-form">
+            <div class="review-meta">
+              <div>
+                <span class="review-meta-label">状态</span>
+                <t-tag variant="light" :theme="statusTheme(selectedSubmission.status)">
+                  {{ statusLabel(selectedSubmission.status) }}
+                </t-tag>
+              </div>
+              <div>
+                <span class="review-meta-label">投稿编号</span>
+                <strong>#{{ selectedSubmission.id }}</strong>
+              </div>
+              <div>
+                <span class="review-meta-label">创建时间</span>
+                <strong>{{ formatDateTime(selectedSubmission.created_at) }}</strong>
+              </div>
+              <div>
+                <span class="review-meta-label">审核时间</span>
+                <strong>{{ formatDateTime(selectedSubmission.reviewed_at) }}</strong>
+              </div>
+              <div class="review-note-meta">
+                <span class="review-meta-label">审核备注</span>
+                <strong>{{ selectedSubmission.reviewer_note || '-' }}</strong>
+              </div>
+            </div>
+
             <t-form label-align="top" @submit.prevent>
               <t-form-item label="问题">
                 <t-textarea
                   v-model="reviewForm.question"
                   :autosize="{ minRows: 2, maxRows: 4 }"
-                  :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                  :disabled="!canEditReviewForm"
                 />
               </t-form-item>
               <t-form-item label="答案">
                 <t-textarea
                   v-model="reviewForm.answer"
                   :autosize="{ minRows: 4, maxRows: 7 }"
-                  :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                  :disabled="!canEditReviewForm"
                 />
               </t-form-item>
 
@@ -384,14 +500,14 @@ function candidateBody(item) {
                 <t-form-item label="分类">
                   <t-input
                     v-model="reviewForm.category"
-                    :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                    :disabled="!canEditReviewForm"
                   />
                 </t-form-item>
                 <t-form-item label="标签">
                   <t-input
                     v-model="reviewForm.tags"
                     placeholder="食堂，营业时间"
-                    :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                    :disabled="!canEditReviewForm"
                   />
                 </t-form-item>
               </div>
@@ -400,13 +516,13 @@ function candidateBody(item) {
                 <t-form-item label="来源">
                   <t-input
                     v-model="reviewForm.source"
-                    :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                    :disabled="!canEditReviewForm"
                   />
                 </t-form-item>
                 <t-form-item label="备注">
                   <t-input
                     v-model="reviewForm.remark"
-                    :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                    :disabled="!canEditReviewForm"
                   />
                 </t-form-item>
               </div>
@@ -415,15 +531,15 @@ function candidateBody(item) {
                 <t-input
                   v-model="reviewForm.reviewerNote"
                   placeholder="可填写通过或驳回原因"
-                  :disabled="reviewLoading || selectedSubmission.status !== 'pending'"
+                  :disabled="!canEditReviewForm"
                 />
               </t-form-item>
 
               <div class="review-actions">
                 <t-button
                   theme="success"
-                  :loading="reviewLoading"
-                  :disabled="!canApproveSubmission || selectedSubmission.status !== 'pending'"
+                  :loading="approveLoading"
+                  :disabled="!canApproveSubmission"
                   @click="approveSubmission"
                 >
                   通过并入库
@@ -431,8 +547,8 @@ function candidateBody(item) {
                 <t-button
                   theme="danger"
                   variant="outline"
-                  :loading="reviewLoading"
-                  :disabled="!canRejectSubmission || selectedSubmission.status !== 'pending'"
+                  :loading="rejectLoading"
+                  :disabled="!canRejectSubmission"
                   @click="rejectSubmission"
                 >
                   驳回
